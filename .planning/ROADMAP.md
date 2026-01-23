@@ -15,7 +15,7 @@ This milestone adds an HTTP API layer to Cesar, enabling programmatic transcript
 - Phases 2-5 for v2.0 (phase 1 was v1.0)
 - Decimal phases (e.g., 2.1) reserved for urgent insertions
 
-- [ ] **Phase 2: Foundation** - Job models and SQLite repository
+- [x] **Phase 2: Foundation** - Job models and SQLite repository
 - [ ] **Phase 3: Background Worker** - Sequential job processor
 - [ ] **Phase 4: HTTP API** - FastAPI endpoints and file handling
 - [ ] **Phase 5: CLI Integration** - cesar serve command
@@ -35,8 +35,8 @@ This milestone adds an HTTP API layer to Cesar, enabling programmatic transcript
 **Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 02-01-PLAN.md - Job model and JobStatus enum with Pydantic v2
-- [ ] 02-02-PLAN.md - SQLite schema and JobRepository with async CRUD
+- [x] 02-01-PLAN.md - Job model and JobStatus enum with Pydantic v2
+- [x] 02-02-PLAN.md - SQLite schema and JobRepository with async CRUD
 
 ### Phase 3: Background Worker
 **Goal**: Jobs are processed sequentially in the background
@@ -87,7 +87,7 @@ Phases execute in numeric order: 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 2. Foundation | 0/2 | Ready | - |
-| 3. Background Worker | 0/? | Not started | - |
+| 2. Foundation | 2/2 | Complete | 2026-01-23 |
+| 3. Background Worker | 0/? | Ready | - |
 | 4. HTTP API | 0/? | Not started | - |
 | 5. CLI Integration | 0/? | Not started | - |
