@@ -117,3 +117,32 @@ async def get_job(job_id: str = PathParam(..., description="Job UUID")):
     if not job:
         raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
     return job
+
+
+@app.get("/jobs", response_model=List[Job])
+async def list_jobs(status: Optional[str] = None):
+    """List all jobs, optionally filtered by status.
+
+    Args:
+        status: Optional status filter (queued, processing, completed, error)
+
+    Returns:
+        List[Job]: All jobs matching the filter criteria
+
+    Raises:
+        HTTPException: 400 if invalid status provided
+    """
+    jobs = await app.state.repo.list_all()
+
+    if status:
+        # Validate status is a valid JobStatus value
+        valid_statuses = [s.value for s in JobStatus]
+        if status not in valid_statuses:
+            raise HTTPException(
+                status_code=400,
+                detail=f"Invalid status: {status}. Valid: {', '.join(valid_statuses)}",
+            )
+        # Filter jobs by status
+        jobs = [job for job in jobs if job.status.value == status]
+
+    return jobs
