@@ -28,10 +28,12 @@ Decimal phases appear between their surrounding integers in numeric order.
   3. User can run `cesar --version` and see correct version number
   4. User can run `cesar --help` and see available commands
   5. User can run `cesar transcribe --help` and see transcribe options
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 01-01: TBD
+- [ ] 01-01-PLAN.md - Create package structure and pyproject.toml
+- [ ] 01-02-PLAN.md - Update tests and clean up old files
+- [ ] 01-03-PLAN.md - Verify pipx installation works
 
 ### Phase 2: User Experience
 **Goal**: Users get helpful prompts and error messages for external dependencies
@@ -66,6 +68,6 @@ Phases execute in numeric order: 1 -> 2 -> 3
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 1. Package & CLI Structure | 0/? | Not started | - |
+| 1. Package & CLI Structure | 0/3 | Planned | - |
 | 2. User Experience | 0/? | Not started | - |
 | 3. Cross-Platform Validation | 0/? | Not started | - |
