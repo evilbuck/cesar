@@ -16,7 +16,7 @@ This milestone adds an HTTP API layer to Cesar, enabling programmatic transcript
 - Decimal phases (e.g., 2.1) reserved for urgent insertions
 
 - [x] **Phase 2: Foundation** - Job models and SQLite repository
-- [ ] **Phase 3: Background Worker** - Sequential job processor
+- [x] **Phase 3: Background Worker** - Sequential job processor
 - [ ] **Phase 4: HTTP API** - FastAPI endpoints and file handling
 - [ ] **Phase 5: CLI Integration** - cesar serve command
 
@@ -49,7 +49,7 @@ Plans:
 **Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 03-01-PLAN.md - BackgroundWorker with async loop and thread pool transcription
+- [x] 03-01-PLAN.md - BackgroundWorker with async loop and thread pool transcription
 
 ### Phase 4: HTTP API
 **Goal**: Full REST API for transcription jobs with OpenAPI docs
@@ -88,6 +88,6 @@ Phases execute in numeric order: 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 2. Foundation | 2/2 | Complete | 2026-01-23 |
-| 3. Background Worker | 0/1 | Ready | - |
+| 3. Background Worker | 1/1 | Complete | 2026-01-23 |
 | 4. HTTP API | 0/? | Not started | - |
 | 5. CLI Integration | 0/? | Not started | - |
