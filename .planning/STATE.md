@@ -4,35 +4,34 @@
 
 See: .planning/PROJECT.md (updated 2026-01-23)
 
-**Core value:** Transcribe audio to text anywhere, offline, with a single command
-**Current focus:** Planning next milestone
+**Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
+**Current focus:** Phase 2 - Foundation (Job models and SQLite repository)
 
 ## Current Position
 
-Milestone: v1.0 Package & CLI — SHIPPED
-Phase: Ready for next milestone
-Plan: Not started
-Status: Milestone complete
-Last activity: 2026-01-23 — v1.0 milestone shipped
+Milestone: v2.0 API
+Phase: 2 of 5 (Foundation)
+Plan: 0 of ? in current phase
+Status: Ready to plan
+Last activity: 2026-01-23 — Roadmap created for v2.0 API milestone
 
-Progress: [██████████] 100% (v1.0 complete)
+Progress: [░░░░░░░░░░] 0% (v2.0)
 
 ## Performance Metrics
 
-**Velocity:**
+**Velocity (v1.0):**
 - Total plans completed: 3
 - Average duration: 3 min
 - Total execution time: 9 min
 
-**By Phase:**
+**v2.0 Progress:**
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 01-package-cli-structure | 3 | 9 min | 3 min |
-
-**Recent Trend:**
-- Last 3 plans: 3 min, 4 min, 2 min
-- Trend: stable
+| 2. Foundation | 0/? | - | - |
+| 3. Background Worker | 0/? | - | - |
+| 4. HTTP API | 0/? | - | - |
+| 5. CLI Integration | 0/? | - | - |
 
 *Updated after each plan completion*
 
@@ -43,10 +42,10 @@ Progress: [██████████] 100% (v1.0 complete)
 Decisions are logged in PROJECT.md Key Decisions table.
 Recent decisions affecting current work:
 
-- Used setuptools build backend (standard, well-supported)
-- Single-source versioning via importlib.metadata with 0.0.0 dev fallback
-- Converted CLI from single command to click.Group for future subcommands
-- Mock DeviceDetector.get_capabilities to avoid torch import in tests
+- [v2.0]: FastAPI for HTTP API (modern, async, automatic OpenAPI docs)
+- [v2.0]: SQLite for job persistence (no external dependencies, offline-first)
+- [v2.0]: Async job queue (transcription is slow, don't block requests)
+- [v2.0]: Defer CLI refactor (ship API first, unify architecture later)
 
 ### Pending Todos
 
@@ -59,17 +58,13 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-23
-Stopped at: v1.0 milestone shipped, ready for next milestone
+Stopped at: Roadmap created, ready to plan Phase 2
 Resume file: None
 
 ## v1.0 Summary
 
-Shipped with Phase 1 complete:
+Shipped 2026-01-23:
 - Package structure with cesar/ directory and pyproject.toml
 - pipx installation verified end-to-end
 - Tests migrated, 35 passing
-- README updated
-
-Deferred to next milestone:
-- Phase 2: User Experience (model prompts, ffprobe errors)
-- Phase 3: Cross-Platform Validation (macOS/Linux)
+- `cesar transcribe` command working

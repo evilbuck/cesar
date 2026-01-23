@@ -80,30 +80,30 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| API-01 | TBD | Pending |
-| API-02 | TBD | Pending |
-| API-03 | TBD | Pending |
-| API-04 | TBD | Pending |
-| API-05 | TBD | Pending |
-| API-06 | TBD | Pending |
-| JOB-01 | TBD | Pending |
-| JOB-02 | TBD | Pending |
-| JOB-03 | TBD | Pending |
-| JOB-04 | TBD | Pending |
-| JOB-05 | TBD | Pending |
-| JOB-06 | TBD | Pending |
-| JOB-07 | TBD | Pending |
-| RES-01 | TBD | Pending |
-| RES-02 | TBD | Pending |
-| SRV-01 | TBD | Pending |
-| SRV-02 | TBD | Pending |
-| SRV-03 | TBD | Pending |
+| API-01 | Phase 4 | Pending |
+| API-02 | Phase 4 | Pending |
+| API-03 | Phase 4 | Pending |
+| API-04 | Phase 4 | Pending |
+| API-05 | Phase 4 | Pending |
+| API-06 | Phase 4 | Pending |
+| JOB-01 | Phase 2 | Pending |
+| JOB-02 | Phase 2 | Pending |
+| JOB-03 | Phase 2 | Pending |
+| JOB-04 | Phase 2 | Pending |
+| JOB-05 | Phase 3 | Pending |
+| JOB-06 | Phase 3 | Pending |
+| JOB-07 | Phase 2 | Pending |
+| RES-01 | Phase 2 | Pending |
+| RES-02 | Phase 2 | Pending |
+| SRV-01 | Phase 5 | Pending |
+| SRV-02 | Phase 5 | Pending |
+| SRV-03 | Phase 4 | Pending |
 
 **Coverage:**
 - v2.0 requirements: 18 total
-- Mapped to phases: 0
-- Unmapped: 18 (pending roadmap creation)
+- Mapped to phases: 18
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-23*
-*Last updated: 2026-01-23 after initial definition*
+*Last updated: 2026-01-23 after roadmap creation*
