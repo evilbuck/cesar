@@ -62,10 +62,12 @@ Plans:
   4. GET /jobs returns list of all jobs
   5. GET /health returns server health status
   6. OpenAPI/Swagger docs available at /docs
-**Plans**: TBD
+**Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 04-01: TBD
+- [ ] 04-01-PLAN.md - FastAPI server setup with lifespan and health endpoint
+- [ ] 04-02-PLAN.md - Job retrieval endpoints (GET /jobs, GET /jobs/{id})
+- [ ] 04-03-PLAN.md - Transcribe endpoints with file upload and URL support
 
 ### Phase 5: CLI Integration
 **Goal**: Server can be started via cesar serve command
@@ -89,5 +91,5 @@ Phases execute in numeric order: 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 2. Foundation | 2/2 | Complete | 2026-01-23 |
 | 3. Background Worker | 1/1 | Complete | 2026-01-23 |
-| 4. HTTP API | 0/? | Not started | - |
+| 4. HTTP API | 0/3 | Not started | - |
 | 5. CLI Integration | 0/? | Not started | - |
