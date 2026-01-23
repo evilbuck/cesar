@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-23)
 
 Milestone: v2.0 API
 Phase: 4 of 5 (HTTP API)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-01-23 - Completed 04-01-PLAN.md
+Last activity: 2026-01-23 - Completed 04-02-PLAN.md
 
-Progress: [███████░░░] 77% (v2.0: 7/9 plans)
+Progress: [████████░░] 88% (v2.0: 8/9 plans)
 
 ## Performance Metrics
 
@@ -30,7 +30,7 @@ Progress: [███████░░░] 77% (v2.0: 7/9 plans)
 |-------|-------|-------|----------|
 | 2. Foundation | 2/2 | 4 min | 2 min |
 | 3. Background Worker | 1/1 | 2 min | 2 min |
-| 4. HTTP API | 1/3 | 2 min | 2 min |
+| 4. HTTP API | 2/3 | 6 min | 3 min |
 | 5. CLI Integration | 0/? | - | - |
 
 *Updated after each plan completion*
@@ -59,6 +59,9 @@ Recent decisions affecting current work:
 - [04-01]: Lifespan context manager pattern (not deprecated @app.on_event)
 - [04-01]: Worker task stored in app.state for endpoint access
 - [04-01]: Default DB path: ~/.local/share/cesar/jobs.db
+- [04-02]: TestClient context manager for proper lifespan in tests
+- [04-02]: Status filter validates against JobStatus enum values
+- [04-02]: 400 for invalid status (clearer than 422)
 
 ### Pending Todos
 
@@ -70,8 +73,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-23T23:34:01Z
-Stopped at: Completed 04-01-PLAN.md (FastAPI Server)
+Last session: 2026-01-23T23:42:10Z
+Stopped at: Completed 04-02-PLAN.md (Job GET Endpoints)
 Resume file: None
 
 ## v1.0 Summary
@@ -92,6 +95,7 @@ Shipped 2026-01-23:
 | 02-02 | SQLite Repository | 2 min | f0a3e50, bf3cc1f, e79ad48 |
 | 03-01 | Background Worker | 2 min | 5ed6d14, a9f6b12 |
 | 04-01 | FastAPI Server | 2 min | f336179, b0a5618, f8ff2aa |
+| 04-02 | Job GET Endpoints | 4 min | 5d2aea1, 3be2928, f475e51 |
 
 ### Phase 2 Verified
 
@@ -119,6 +123,12 @@ Plan 01 complete (4/4 must-haves verified):
 - Worker starts automatically with server
 - Server shuts down gracefully
 
+Plan 02 complete (4/4 must-haves verified):
+- GET /jobs/{id} returns job details when job exists
+- GET /jobs/{id} returns 404 when job not found
+- GET /jobs returns list of all jobs
+- GET /jobs?status=queued filters by status
+
 ### Next Up
 
-Phase 4 Plan 02: Job Submission Endpoints
+Phase 4 Plan 03: Job Submission Endpoints
