@@ -17,7 +17,7 @@ This milestone adds an HTTP API layer to Cesar, enabling programmatic transcript
 
 - [x] **Phase 2: Foundation** - Job models and SQLite repository
 - [x] **Phase 3: Background Worker** - Sequential job processor
-- [ ] **Phase 4: HTTP API** - FastAPI endpoints and file handling
+- [x] **Phase 4: HTTP API** - FastAPI endpoints and file handling
 - [ ] **Phase 5: CLI Integration** - cesar serve command
 
 ## Phase Details
@@ -65,9 +65,9 @@ Plans:
 **Plans**: 3 plans in 2 waves
 
 Plans:
-- [ ] 04-01-PLAN.md - FastAPI server setup with lifespan and health endpoint
-- [ ] 04-02-PLAN.md - Job retrieval endpoints (GET /jobs, GET /jobs/{id})
-- [ ] 04-03-PLAN.md - Transcribe endpoints with file upload and URL support
+- [x] 04-01-PLAN.md - FastAPI server setup with lifespan and health endpoint
+- [x] 04-02-PLAN.md - Job retrieval endpoints (GET /jobs, GET /jobs/{id})
+- [x] 04-03-PLAN.md - Transcribe endpoints with file upload and URL support
 
 ### Phase 5: CLI Integration
 **Goal**: Server can be started via cesar serve command
@@ -91,5 +91,5 @@ Phases execute in numeric order: 2 -> 3 -> 4 -> 5
 |-------|----------------|--------|-----------|
 | 2. Foundation | 2/2 | Complete | 2026-01-23 |
 | 3. Background Worker | 1/1 | Complete | 2026-01-23 |
-| 4. HTTP API | 0/3 | Not started | - |
+| 4. HTTP API | 3/3 | Complete | 2026-01-23 |
 | 5. CLI Integration | 0/? | Not started | - |
