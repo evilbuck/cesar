@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-23)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Phase 2 - Foundation (Job models and SQLite repository)
+**Current focus:** Phase 2 - Foundation (COMPLETE)
 
 ## Current Position
 
 Milestone: v2.0 API
 Phase: 2 of 5 (Foundation)
-Plan: 1 of 2 in current phase
-Status: In progress
-Last activity: 2026-01-23 - Completed 02-01-PLAN.md (Job Model)
+Plan: 2 of 2 in current phase
+Status: Phase complete
+Last activity: 2026-01-23 - Completed 02-02-PLAN.md (SQLite Repository)
 
-Progress: [████░░░░░░] 40% (v2.0: 4/10 plans including v1.0)
+Progress: [█████░░░░░] 50% (v2.0: 5/10 plans including v1.0)
 
 ## Performance Metrics
 
@@ -28,7 +28,7 @@ Progress: [████░░░░░░] 40% (v2.0: 4/10 plans including v1.0)
 
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
-| 2. Foundation | 1/2 | 2 min | 2 min |
+| 2. Foundation | 2/2 | 4 min | 2 min |
 | 3. Background Worker | 0/? | - | - |
 | 4. HTTP API | 0/? | - | - |
 | 5. CLI Integration | 0/? | - | - |
@@ -49,6 +49,9 @@ Recent decisions affecting current work:
 - [02-01]: datetime.utcnow() for timestamps (Python 3.12 deprecation acceptable)
 - [02-01]: extra='forbid' for fail-fast validation on unknown fields
 - [02-01]: audio_path validation (non-empty, non-whitespace)
+- [02-02]: WAL mode with busy_timeout=5000 for concurrent access
+- [02-02]: ISO 8601 TEXT strings for timestamp storage
+- [02-02]: In-memory database for test isolation
 
 ### Pending Todos
 
@@ -60,8 +63,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-23T20:57:52Z
-Stopped at: Completed 02-01-PLAN.md (Job Model)
+Last session: 2026-01-23T21:02:25Z
+Stopped at: Completed 02-02-PLAN.md (SQLite Repository)
 Resume file: None
 
 ## v1.0 Summary
@@ -79,7 +82,8 @@ Shipped 2026-01-23:
 | Plan | Name | Duration | Commits |
 |------|------|----------|---------|
 | 02-01 | Job Model | 2 min | 334a8ff, 87ed8a7 |
+| 02-02 | SQLite Repository | 2 min | f0a3e50, bf3cc1f, e79ad48 |
 
 ### Next Up
 
-02-02: SQLite Repository
+03-01: Background Worker (Phase 3)
