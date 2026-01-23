@@ -69,23 +69,23 @@ Deferred to future release.
 | PKG-03 | Phase 1 | Pending |
 | PKG-04 | Phase 1 | Pending |
 | PKG-05 | Phase 1 | Pending |
-| CLI-01 | Phase 2 | Pending |
-| CLI-02 | Phase 2 | Pending |
-| CLI-03 | Phase 2 | Pending |
-| CLI-04 | Phase 2 | Pending |
-| UX-01 | Phase 3 | Pending |
-| UX-02 | Phase 3 | Pending |
-| UX-03 | Phase 3 | Pending |
-| UX-04 | Phase 3 | Pending |
-| VAL-01 | Phase 4 | Pending |
-| VAL-02 | Phase 4 | Pending |
-| VAL-03 | Phase 4 | Pending |
+| CLI-01 | Phase 1 | Pending |
+| CLI-02 | Phase 1 | Pending |
+| CLI-03 | Phase 1 | Pending |
+| CLI-04 | Phase 1 | Pending |
+| UX-01 | Phase 2 | Pending |
+| UX-02 | Phase 2 | Pending |
+| UX-03 | Phase 2 | Pending |
+| UX-04 | Phase 2 | Pending |
+| VAL-01 | Phase 3 | Pending |
+| VAL-02 | Phase 3 | Pending |
+| VAL-03 | Phase 3 | Pending |
 
 **Coverage:**
 - v1 requirements: 16 total
 - Mapped to phases: 16
-- Unmapped: 0 ✓
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-01-23*
-*Last updated: 2026-01-23 after initial definition*
+*Last updated: 2026-01-23 after roadmap creation*
