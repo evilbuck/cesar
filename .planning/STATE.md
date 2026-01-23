@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-23)
 
 Milestone: v2.0 API
 Phase: 3 of 5 (Background Worker)
-Plan: 0 of ? in current phase
-Status: Ready to plan
-Last activity: 2026-01-23 - Phase 2 verified and complete
+Plan: 1 of 1 in current phase
+Status: Phase complete
+Last activity: 2026-01-23 - Completed 03-01-PLAN.md
 
-Progress: [█████░░░░░] 50% (v2.0: 5/10 plans including v1.0)
+Progress: [██████░░░░] 60% (v2.0: 6/10 plans including v1.0)
 
 ## Performance Metrics
 
@@ -29,7 +29,7 @@ Progress: [█████░░░░░] 50% (v2.0: 5/10 plans including v1.0)
 | Phase | Plans | Total | Avg/Plan |
 |-------|-------|-------|----------|
 | 2. Foundation | 2/2 | 4 min | 2 min |
-| 3. Background Worker | 0/? | - | - |
+| 3. Background Worker | 1/1 | 2 min | 2 min |
 | 4. HTTP API | 0/? | - | - |
 | 5. CLI Integration | 0/? | - | - |
 
@@ -52,6 +52,10 @@ Recent decisions affecting current work:
 - [02-02]: WAL mode with busy_timeout=5000 for concurrent access
 - [02-02]: ISO 8601 TEXT strings for timestamp storage
 - [02-02]: In-memory database for test isolation
+- [03-01]: Poll interval 1.0s default for worker (configurable)
+- [03-01]: asyncio.Event for shutdown signaling
+- [03-01]: asyncio.to_thread() for blocking transcription operations
+- [03-01]: Temp file cleanup in finally block
 
 ### Pending Todos
 
@@ -64,7 +68,7 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-01-23
-Stopped at: Phase 2 complete and verified, ready to plan Phase 3
+Stopped at: Completed 03-01-PLAN.md (Background Worker)
 Resume file: None
 
 ## v1.0 Summary
@@ -83,6 +87,7 @@ Shipped 2026-01-23:
 |------|------|----------|---------|
 | 02-01 | Job Model | 2 min | 334a8ff, 87ed8a7 |
 | 02-02 | SQLite Repository | 2 min | f0a3e50, bf3cc1f, e79ad48 |
+| 03-01 | Background Worker | 2 min | 5ed6d14, a9f6b12 |
 
 ### Phase 2 Verified
 
@@ -93,6 +98,15 @@ All must-haves verified (13/13):
 - Error messages stored ✓
 - SQLite persistence ✓
 
+### Phase 3 Verified
+
+All must-haves verified (5/5):
+- Multiple jobs can be queued while one is processing ✓
+- Jobs process one at a time in FIFO order ✓
+- Worker picks up pending jobs automatically ✓
+- Worker stops gracefully on shutdown signal ✓
+- Failed transcription marks job as ERROR with message ✓
+
 ### Next Up
 
-Phase 3: Background Worker (ready to plan)
+Phase 4: HTTP API (ready to plan)
