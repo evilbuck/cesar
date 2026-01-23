@@ -10,9 +10,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, Form, HTTPException, UploadFile, status
 from fastapi import Path as PathParam
 
+from cesar.api.file_handler import save_upload_file
 from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
@@ -146,3 +147,30 @@ async def list_jobs(status: Optional[str] = None):
         jobs = [job for job in jobs if job.status.value == status]
 
     return jobs
+
+
+@app.post("/transcribe", response_model=Job, status_code=status.HTTP_202_ACCEPTED)
+async def transcribe_file_upload(
+    file: UploadFile,
+    model: str = Form(default="base"),
+):
+    """Upload audio file for transcription.
+
+    Accepts multipart/form-data with an audio file and optional model parameter.
+    The file is saved to a temporary location and a job is created for processing.
+
+    Args:
+        file: Audio file to transcribe (mp3, wav, m4a, ogg, flac, aac, wma, webm)
+        model: Whisper model size (tiny, base, small, medium, large)
+
+    Returns:
+        Job: Created job with queued status
+
+    Raises:
+        HTTPException: 413 if file too large (max 100MB)
+        HTTPException: 400 if invalid file type
+    """
+    tmp_path = await save_upload_file(file)
+    job = Job(audio_path=tmp_path, model_size=model)
+    await app.state.repo.create(job)
+    return job
