@@ -13,7 +13,9 @@ from typing import List, Optional
 from fastapi import FastAPI, Form, HTTPException, UploadFile, status
 from fastapi import Path as PathParam
 
-from cesar.api.file_handler import save_upload_file
+from pydantic import BaseModel
+
+from cesar.api.file_handler import download_from_url, save_upload_file
 from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
@@ -172,5 +174,35 @@ async def transcribe_file_upload(
     """
     tmp_path = await save_upload_file(file)
     job = Job(audio_path=tmp_path, model_size=model)
+    await app.state.repo.create(job)
+    return job
+
+
+class TranscribeURLRequest(BaseModel):
+    """Request body for URL-based transcription."""
+
+    url: str
+    model: str = "base"
+
+
+@app.post("/transcribe/url", response_model=Job, status_code=status.HTTP_202_ACCEPTED)
+async def transcribe_from_url(request: TranscribeURLRequest):
+    """Download audio from URL and transcribe.
+
+    Accepts a JSON body with URL and optional model parameter.
+    The file is downloaded to a temporary location and a job is created for processing.
+
+    Args:
+        request: Request body with url and optional model
+
+    Returns:
+        Job: Created job with queued status
+
+    Raises:
+        HTTPException: 408 if URL download times out
+        HTTPException: 400 if download fails or invalid file type
+    """
+    tmp_path = await download_from_url(request.url)
+    job = Job(audio_path=tmp_path, model_size=request.model)
     await app.state.repo.create(job)
     return job
