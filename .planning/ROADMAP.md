@@ -32,10 +32,11 @@ This milestone adds an HTTP API layer to Cesar, enabling programmatic transcript
   3. Job timestamps (created_at, started_at, completed_at) are tracked
   4. Failed jobs store error message
   5. Jobs survive server restart (data persists in SQLite file)
-**Plans**: TBD
+**Plans**: 2 plans in 2 waves
 
 Plans:
-- [ ] 02-01: TBD
+- [ ] 02-01-PLAN.md - Job model and JobStatus enum with Pydantic v2
+- [ ] 02-02-PLAN.md - SQLite schema and JobRepository with async CRUD
 
 ### Phase 3: Background Worker
 **Goal**: Jobs are processed sequentially in the background
@@ -86,7 +87,7 @@ Phases execute in numeric order: 2 -> 3 -> 4 -> 5
 
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
-| 2. Foundation | 0/? | Not started | - |
+| 2. Foundation | 0/2 | Ready | - |
 | 3. Background Worker | 0/? | Not started | - |
 | 4. HTTP API | 0/? | Not started | - |
 | 5. CLI Integration | 0/? | Not started | - |
