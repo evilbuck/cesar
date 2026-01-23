@@ -8,9 +8,12 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import List, Optional
 
-from fastapi import FastAPI
+from fastapi import FastAPI, HTTPException
+from fastapi import Path as PathParam
 
+from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
 
@@ -95,3 +98,22 @@ async def health():
         "status": "healthy",
         "worker": worker_status,
     }
+
+
+@app.get("/jobs/{job_id}", response_model=Job)
+async def get_job(job_id: str = PathParam(..., description="Job UUID")):
+    """Get job status and results by ID.
+
+    Args:
+        job_id: Unique job identifier (UUID)
+
+    Returns:
+        Job: The job with matching ID
+
+    Raises:
+        HTTPException: 404 if job not found
+    """
+    job = await app.state.repo.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+    return job
