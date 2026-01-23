@@ -11,11 +11,11 @@ See: .planning/PROJECT.md (updated 2026-01-23)
 
 Milestone: v2.0 API
 Phase: 4 of 5 (HTTP API)
-Plan: 2 of 3 in current phase
-Status: In progress
-Last activity: 2026-01-23 - Completed 04-02-PLAN.md
+Plan: 3 of 3 in current phase
+Status: Phase complete
+Last activity: 2026-01-23 - Completed 04-03-PLAN.md
 
-Progress: [████████░░] 88% (v2.0: 8/9 plans)
+Progress: [█████████░] 100% (v2.0: 9/9 plans - Phase 4 complete)
 
 ## Performance Metrics
 
@@ -30,7 +30,7 @@ Progress: [████████░░] 88% (v2.0: 8/9 plans)
 |-------|-------|-------|----------|
 | 2. Foundation | 2/2 | 4 min | 2 min |
 | 3. Background Worker | 1/1 | 2 min | 2 min |
-| 4. HTTP API | 2/3 | 6 min | 3 min |
+| 4. HTTP API | 3/3 | 10 min | 3 min |
 | 5. CLI Integration | 0/? | - | - |
 
 *Updated after each plan completion*
@@ -62,6 +62,9 @@ Recent decisions affecting current work:
 - [04-02]: TestClient context manager for proper lifespan in tests
 - [04-02]: Status filter validates against JobStatus enum values
 - [04-02]: 400 for invalid status (clearer than 422)
+- [04-03]: Separate endpoints /transcribe (file upload) and /transcribe/url (URL download)
+- [04-03]: MAX_FILE_SIZE = 100MB, URL_TIMEOUT = 60s
+- [04-03]: Extension whitelist for audio files
 
 ### Pending Todos
 
@@ -73,8 +76,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-23T23:42:10Z
-Stopped at: Completed 04-02-PLAN.md (Job GET Endpoints)
+Last session: 2026-01-23T23:42:26Z
+Stopped at: Completed 04-03-PLAN.md (Job Submission Endpoints)
 Resume file: None
 
 ## v1.0 Summary
@@ -96,6 +99,7 @@ Shipped 2026-01-23:
 | 03-01 | Background Worker | 2 min | 5ed6d14, a9f6b12 |
 | 04-01 | FastAPI Server | 2 min | f336179, b0a5618, f8ff2aa |
 | 04-02 | Job GET Endpoints | 4 min | 5d2aea1, 3be2928, f475e51 |
+| 04-03 | Job Submission Endpoints | 4 min | b15148b, 41ca8be, e0bbc69 |
 
 ### Phase 2 Verified
 
@@ -129,6 +133,24 @@ Plan 02 complete (4/4 must-haves verified):
 - GET /jobs returns list of all jobs
 - GET /jobs?status=queued filters by status
 
+Plan 03 complete (5/5 must-haves verified):
+- POST /transcribe with file upload creates job and returns 202
+- POST /transcribe/url with URL creates job and returns 202
+- File too large returns 413
+- Invalid file type returns 400
+- Failed URL download returns appropriate error
+
+### Phase 4 Verified
+
+All must-haves verified (13/13):
+- Health endpoint working
+- OpenAPI docs available
+- Worker lifecycle managed
+- Job GET/List endpoints working
+- Job submission endpoints working
+- Validation for file size/type
+- Error handling for downloads
+
 ### Next Up
 
-Phase 4 Plan 03: Job Submission Endpoints
+Phase 5: CLI Integration
