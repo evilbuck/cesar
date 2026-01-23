@@ -9,18 +9,18 @@ Requirements for pip/pipx installable CLI.
 
 ### Packaging
 
-- [ ] **PKG-01**: Package installable via `pipx install git+<repo-url>`
-- [ ] **PKG-02**: Global `cesar` command available after install
-- [ ] **PKG-03**: pyproject.toml with setuptools build system and dependencies
-- [ ] **PKG-04**: Entry point registered via `[project.scripts]`
-- [ ] **PKG-05**: Python version constraint (>=3.10) specified
+- [x] **PKG-01**: Package installable via `pipx install git+<repo-url>`
+- [x] **PKG-02**: Global `cesar` command available after install
+- [x] **PKG-03**: pyproject.toml with setuptools build system and dependencies
+- [x] **PKG-04**: Entry point registered via `[project.scripts]`
+- [x] **PKG-05**: Python version constraint (>=3.10) specified
 
 ### CLI Structure
 
-- [ ] **CLI-01**: Subcommand structure: `cesar transcribe <file> -o <output>`
-- [ ] **CLI-02**: `cesar --version` shows correct version
-- [ ] **CLI-03**: `cesar --help` shows available commands
-- [ ] **CLI-04**: `cesar transcribe --help` shows transcribe options
+- [x] **CLI-01**: Subcommand structure: `cesar transcribe <file> -o <output>`
+- [x] **CLI-02**: `cesar --version` shows correct version
+- [x] **CLI-03**: `cesar --help` shows available commands
+- [x] **CLI-04**: `cesar transcribe --help` shows transcribe options
 
 ### User Experience
 
@@ -64,15 +64,15 @@ Deferred to future release.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| PKG-01 | Phase 1 | Pending |
-| PKG-02 | Phase 1 | Pending |
-| PKG-03 | Phase 1 | Pending |
-| PKG-04 | Phase 1 | Pending |
-| PKG-05 | Phase 1 | Pending |
-| CLI-01 | Phase 1 | Pending |
-| CLI-02 | Phase 1 | Pending |
-| CLI-03 | Phase 1 | Pending |
-| CLI-04 | Phase 1 | Pending |
+| PKG-01 | Phase 1 | Complete |
+| PKG-02 | Phase 1 | Complete |
+| PKG-03 | Phase 1 | Complete |
+| PKG-04 | Phase 1 | Complete |
+| PKG-05 | Phase 1 | Complete |
+| CLI-01 | Phase 1 | Complete |
+| CLI-02 | Phase 1 | Complete |
+| CLI-03 | Phase 1 | Complete |
+| CLI-04 | Phase 1 | Complete |
 | UX-01 | Phase 2 | Pending |
 | UX-02 | Phase 2 | Pending |
 | UX-03 | Phase 2 | Pending |
