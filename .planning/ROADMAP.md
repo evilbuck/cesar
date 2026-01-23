@@ -46,10 +46,10 @@ Plans:
   1. Multiple jobs can be queued while one is processing
   2. Jobs process one at a time in order received
   3. Worker picks up pending jobs automatically
-**Plans**: TBD
+**Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 03-01: TBD
+- [ ] 03-01-PLAN.md - BackgroundWorker with async loop and thread pool transcription
 
 ### Phase 4: HTTP API
 **Goal**: Full REST API for transcription jobs with OpenAPI docs
@@ -88,6 +88,6 @@ Phases execute in numeric order: 2 -> 3 -> 4 -> 5
 | Phase | Plans Complete | Status | Completed |
 |-------|----------------|--------|-----------|
 | 2. Foundation | 2/2 | Complete | 2026-01-23 |
-| 3. Background Worker | 0/? | Ready | - |
+| 3. Background Worker | 0/1 | Ready | - |
 | 4. HTTP API | 0/? | Not started | - |
 | 5. CLI Integration | 0/? | Not started | - |
