@@ -1,389 +1,773 @@
-# Architecture Patterns: Python CLI Package Structure
+# Architecture Research: Async Transcription API
 
-**Domain:** Python CLI packaging for audio transcription tool
+**Domain:** HTTP API layer for offline audio transcription
 **Researched:** 2026-01-23
-**Confidence:** MEDIUM (based on training data, official docs unavailable for verification)
+**Confidence:** HIGH (verified with FastAPI official docs, established patterns)
 
 ## Executive Summary
 
-The cesar project needs to be restructured from flat Python files to a proper installable package. This document recommends the **src layout** with `pyproject.toml` as the single source of configuration, following modern Python packaging standards (PEP 517, PEP 518, PEP 621).
+The cesar v2.0 API must wrap the existing synchronous `AudioTranscriber` class with an async HTTP layer. The key challenge: faster-whisper's `transcribe()` is CPU-bound and blocks for seconds to minutes. The solution uses a **background worker thread** started via FastAPI's lifespan events, processing jobs from a **SQLite-backed queue**.
 
-## Recommended Architecture
+This architecture avoids external dependencies (no Redis, no Celery) while providing:
+- Non-blocking API endpoints (instant job submission)
+- Persistent job queue (survives process restarts)
+- Progress tracking and result retrieval
+- File upload with automatic cleanup
 
-### Target Project Layout (src layout)
+## Component Design
+
+### Component Diagram
+
+```
+                                    FastAPI Application
+    +------------------------------------------------------------------------+
+    |                                                                        |
+    |   +-----------------+      +--------------------+                      |
+    |   |  HTTP Endpoints |      |   TranscriptionSvc |                      |
+    |   |  (api.py)       |----->|   (service.py)     |                      |
+    |   +-----------------+      +--------------------+                      |
+    |          |                         |                                   |
+    |          |                         v                                   |
+    |          |               +--------------------+                        |
+    |          |               |    JobRepository   |                        |
+    |          |               |   (repository.py)  |                        |
+    |          |               +--------------------+                        |
+    |          |                         |                                   |
+    |          v                         v                                   |
+    |   +-----------------+      +--------------------+                      |
+    |   |  UploadManager  |      |     SQLite DB      |                      |
+    |   |  (uploads.py)   |      |   (jobs.db)        |                      |
+    |   +-----------------+      +--------------------+                      |
+    |          |                         ^                                   |
+    |          v                         |                                   |
+    |   +-----------------+      +--------------------+      +-------------+ |
+    |   |  Temp Files     |      |  BackgroundWorker  |----->| AudioTrans- | |
+    |   |  (uploads/)     |      |  (worker.py)       |      | criber      | |
+    |   +-----------------+      +--------------------+      +-------------+ |
+    |                                                                        |
+    +------------------------------------------------------------------------+
+```
+
+### Component Responsibilities
+
+| Component | File | Responsibility |
+|-----------|------|----------------|
+| HTTP Endpoints | `cesar/api/routes.py` | Request handling, validation, response formatting |
+| TranscriptionService | `cesar/api/service.py` | Job orchestration, business logic |
+| JobRepository | `cesar/api/repository.py` | SQLite CRUD operations for jobs |
+| BackgroundWorker | `cesar/api/worker.py` | Async task processor, runs AudioTranscriber |
+| UploadManager | `cesar/api/uploads.py` | File storage, cleanup, validation |
+| Database Models | `cesar/api/models.py` | Pydantic models and enums |
+
+### Package Structure
 
 ```
 cesar/
-├── pyproject.toml          # Single source of package configuration
-├── README.md
-├── LICENSE
-├── requirements.txt        # Optional: for development pinning
-├── src/
-│   └── cesar/              # Package name
-│       ├── __init__.py     # Package metadata (__version__, etc.)
-│       ├── __main__.py     # python -m cesar support
-│       ├── cli.py          # Click CLI interface
-│       ├── transcriber.py  # Core AudioTranscriber class
-│       ├── device_detection.py
-│       └── utils.py
-├── tests/
-│   ├── __init__.py
-│   ├── conftest.py         # Pytest fixtures
-│   ├── test_cli.py
-│   ├── test_transcriber.py
-│   ├── test_device_detection.py
-│   └── test_utils.py
-├── docs/
+├── __init__.py
+├── __main__.py
+├── cli.py                    # Existing CLI (unchanged)
+├── transcriber.py            # Existing AudioTranscriber (unchanged)
+├── device_detection.py       # Existing (unchanged)
+├── utils.py                  # Existing (unchanged)
+└── api/                      # NEW: API module
+    ├── __init__.py
+    ├── app.py                # FastAPI app factory with lifespan
+    ├── routes.py             # HTTP endpoint definitions
+    ├── service.py            # TranscriptionService class
+    ├── repository.py         # JobRepository (SQLite operations)
+    ├── worker.py             # BackgroundWorker class
+    ├── uploads.py            # UploadManager class
+    ├── models.py             # Pydantic models, enums
+    └── config.py             # API configuration
+```
+
+## Data Flow
+
+### Job Submission Flow
+
+```
+1. Client POST /transcribe (file upload)
+         │
+         v
+2. UploadManager.save_upload()
+   - Validate file type/size
+   - Write to temp storage
+   - Return upload path
+         │
+         v
+3. TranscriptionService.create_job()
+   - Generate UUID
+   - Create job record (status=PENDING)
+   - Return job_id immediately
+         │
+         v
+4. Client receives 202 Accepted
+   - Response: { "job_id": "uuid", "status": "pending" }
+```
+
+### Job Processing Flow
+
+```
+1. BackgroundWorker (running in lifespan)
+   - Polls JobRepository every N seconds
+   - Claims next PENDING job
+         │
+         v
+2. JobRepository.claim_job(job_id)
+   - UPDATE status=PROCESSING, started_at=now()
+   - Return job details
+         │
+         v
+3. loop.run_in_executor(None, transcriber.transcribe_file, ...)
+   - Runs synchronous AudioTranscriber in thread
+   - Does NOT block event loop
+         │
+         v
+4. On completion:
+   - JobRepository.complete_job(job_id, result)
+   - UploadManager.cleanup(job_id)  [optional, configurable]
+   - Webhook callback if configured
+```
+
+### Status Polling Flow
+
+```
+1. Client GET /jobs/{job_id}
+         │
+         v
+2. JobRepository.get_job(job_id)
+         │
+         v
+3. Return job state:
+   - PENDING: { status, created_at, position_in_queue }
+   - PROCESSING: { status, started_at, progress? }
+   - COMPLETED: { status, result, completed_at }
+   - FAILED: { status, error, failed_at }
+```
+
+## SQLite Schema
+
+### Jobs Table
+
+```sql
+CREATE TABLE jobs (
+    id TEXT PRIMARY KEY,           -- UUID
+    status TEXT NOT NULL,          -- PENDING, PROCESSING, COMPLETED, FAILED
+
+    -- Input configuration
+    input_path TEXT NOT NULL,      -- Path to uploaded/downloaded file
+    input_source TEXT NOT NULL,    -- 'upload' or 'url'
+    model_size TEXT DEFAULT 'base',
+    device TEXT DEFAULT 'auto',
+    compute_type TEXT DEFAULT 'auto',
+
+    -- Optional parameters
+    webhook_url TEXT,
+    start_time_seconds REAL,
+    end_time_seconds REAL,
+    max_duration_minutes INTEGER,
+
+    -- Timestamps
+    created_at TEXT NOT NULL,      -- ISO 8601
+    started_at TEXT,
+    completed_at TEXT,
+
+    -- Results
+    result_json TEXT,              -- JSON blob with transcription result
+    error_message TEXT,
+
+    -- Indexes for common queries
+    CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'))
+);
+
+CREATE INDEX idx_jobs_status ON jobs(status);
+CREATE INDEX idx_jobs_created_at ON jobs(created_at);
+```
+
+### Why SQLite (Not In-Memory)
+
+| Consideration | In-Memory Dict | SQLite |
+|---------------|----------------|--------|
+| Persistence | Lost on restart | Survives restart |
+| Concurrent access | Needs locks | Built-in |
+| Query flexibility | Manual filtering | SQL queries |
+| Memory footprint | Grows unbounded | Bounded by disk |
+| Complexity | Simple | Slightly more setup |
+
+**Recommendation:** SQLite is worth the small complexity increase for persistence across restarts.
+
+### aiosqlite Integration
+
+```python
+# repository.py
+import aiosqlite
+from pathlib import Path
+
+class JobRepository:
+    def __init__(self, db_path: Path):
+        self.db_path = db_path
+
+    async def init_db(self):
+        """Initialize database schema"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(SCHEMA_SQL)
+            await db.commit()
+
+    async def create_job(self, job: Job) -> str:
+        """Insert new job, return job_id"""
+        async with aiosqlite.connect(self.db_path) as db:
+            await db.execute(
+                "INSERT INTO jobs (...) VALUES (...)",
+                job.to_row()
+            )
+            await db.commit()
+        return job.id
+
+    async def claim_next_pending(self) -> Optional[Job]:
+        """Atomically claim next pending job for processing"""
+        async with aiosqlite.connect(self.db_path) as db:
+            # Use RETURNING for atomic claim
+            cursor = await db.execute("""
+                UPDATE jobs
+                SET status = 'PROCESSING', started_at = ?
+                WHERE id = (
+                    SELECT id FROM jobs
+                    WHERE status = 'PENDING'
+                    ORDER BY created_at
+                    LIMIT 1
+                )
+                RETURNING *
+            """, (datetime.utcnow().isoformat(),))
+            row = await cursor.fetchone()
+            await db.commit()
+            return Job.from_row(row) if row else None
+```
+
+**Note:** SQLite's `RETURNING` clause (added in 3.35) enables atomic claim-and-return operations.
+
+## File Handling
+
+### Upload Storage Strategy
+
+```
+~/.cesar/                        # Or configurable via env
+├── uploads/                     # Uploaded audio files
+│   ├── {job_id}/
+│   │   └── input.{ext}
 │   └── ...
-└── assets/
-    └── testing speech audio file.m4a
+├── results/                     # Optional: persist transcription results
+│   └── {job_id}.txt
+└── jobs.db                      # SQLite database
 ```
 
-### Why src Layout (Not Flat Layout)
-
-| Criterion | src Layout | Flat Layout |
-|-----------|------------|-------------|
-| Import isolation | Tests import installed package, not local files | Tests may accidentally import local uninstalled code |
-| Namespace clarity | Clear separation: source in src/, tests separate | Package mixed with config files |
-| CI/CD reliability | `pip install .` must succeed for tests to pass | Can mask installation bugs |
-| Industry adoption | Django, Flask, pytest, click all use src layout | Legacy projects |
-
-**Recommendation:** Use src layout because it catches packaging errors during development rather than in production.
-
-## Component Boundaries
-
-| Component | File | Responsibility | Dependencies |
-|-----------|------|----------------|--------------|
-| Entry Point | `__main__.py` | `python -m cesar` support | cli |
-| CLI Layer | `cli.py` | Argument parsing, Rich output, progress display | transcriber, utils |
-| Core Engine | `transcriber.py` | Audio file transcription, model management | device_detection, faster-whisper |
-| Device Layer | `device_detection.py` | Hardware detection, optimal config | torch (optional), subprocess |
-| Utilities | `utils.py` | Time formatting, validation helpers | (none) |
-
-### Dependency Flow
+### File Lifecycle
 
 ```
-User Command
-    │
-    ▼
-cli.py (Click + Rich)
-    │
-    ▼
-transcriber.py (AudioTranscriber)
-    │
-    ├──► device_detection.py (OptimalConfiguration)
-    │
-    └──► faster-whisper (WhisperModel)
+1. UPLOAD
+   - Client uploads file via multipart form
+   - UploadManager validates (size, MIME type, magic bytes)
+   - File saved to uploads/{job_id}/input.{ext}
+   - Path stored in job record
+
+2. PROCESSING
+   - BackgroundWorker reads from stored path
+   - AudioTranscriber processes (no changes to existing code)
+   - Result written to job record (result_json)
+
+3. CLEANUP (Configurable)
+   Option A: Immediate cleanup after completion
+   - Delete uploads/{job_id}/ when job completes
+
+   Option B: Retention period
+   - Cleanup task deletes files older than N hours
+
+   Option C: Manual cleanup
+   - DELETE /jobs/{job_id} removes files
 ```
 
-## Migration Plan from Current Structure
+### UploadManager Implementation
 
-### Current Files → Target Locations
-
-| Current Location | Target Location |
-|------------------|-----------------|
-| `transcribe.py` | DELETE (replaced by entry point) |
-| `cli.py` | `src/cesar/cli.py` |
-| `transcriber.py` | `src/cesar/transcriber.py` |
-| `device_detection.py` | `src/cesar/device_detection.py` |
-| `utils.py` | `src/cesar/utils.py` |
-| `test_*.py` (root) | `tests/test_*.py` |
-| `tests/test_*.py` | `tests/test_*.py` (consolidate) |
-
-### Import Changes Required
-
-Current imports (relative):
 ```python
-# cli.py
-from transcriber import AudioTranscriber
-from utils import format_time, estimate_processing_time
+# uploads.py
+class UploadManager:
+    ALLOWED_EXTENSIONS = {'.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac'}
+    MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB default
+
+    def __init__(self, base_path: Path):
+        self.base_path = base_path
+        self.base_path.mkdir(parents=True, exist_ok=True)
+
+    async def save_upload(
+        self,
+        job_id: str,
+        file: UploadFile
+    ) -> Path:
+        """Save uploaded file, return path"""
+        # Validate extension
+        ext = Path(file.filename).suffix.lower()
+        if ext not in self.ALLOWED_EXTENSIONS:
+            raise ValueError(f"Unsupported format: {ext}")
+
+        # Create job directory
+        job_dir = self.base_path / job_id
+        job_dir.mkdir(exist_ok=True)
+
+        # Save file with streaming (memory efficient)
+        file_path = job_dir / f"input{ext}"
+        async with aiofiles.open(file_path, 'wb') as out:
+            while chunk := await file.read(8192):
+                await out.write(chunk)
+
+        return file_path
+
+    async def cleanup_job(self, job_id: str) -> None:
+        """Remove all files for a job"""
+        job_dir = self.base_path / job_id
+        if job_dir.exists():
+            shutil.rmtree(job_dir)
 ```
 
-Target imports (absolute within package):
+## Integration with Existing Code
+
+### Principle: Minimal Changes to Existing Code
+
+The existing `AudioTranscriber` class works well. The API layer wraps it without modification.
+
+### Running Synchronous Code in Async Context
+
+**Pattern:** Use `loop.run_in_executor()` to run `AudioTranscriber.transcribe_file()` without blocking.
+
 ```python
-# cesar/cli.py
+# worker.py
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from cesar.transcriber import AudioTranscriber
-from cesar.utils import format_time, estimate_processing_time
+
+class BackgroundWorker:
+    def __init__(self, repository: JobRepository, upload_manager: UploadManager):
+        self.repository = repository
+        self.upload_manager = upload_manager
+        self.executor = ThreadPoolExecutor(max_workers=1)  # Single transcription at a time
+        self._running = False
+
+    async def process_job(self, job: Job) -> dict:
+        """Run transcription in thread pool"""
+        loop = asyncio.get_running_loop()
+
+        # Create transcriber with job's configuration
+        transcriber = AudioTranscriber(
+            model_size=job.model_size,
+            device=job.device if job.device != 'auto' else None,
+            compute_type=job.compute_type if job.compute_type != 'auto' else None,
+        )
+
+        # Run blocking transcription in executor
+        result = await loop.run_in_executor(
+            self.executor,
+            transcriber.transcribe_file,
+            str(job.input_path),
+            str(self._get_output_path(job)),
+            None,  # progress_callback (not used in API)
+            job.max_duration_minutes,
+            job.start_time_seconds,
+            job.end_time_seconds,
+        )
+
+        return result
 ```
 
-### New Files to Create
+**Why ThreadPoolExecutor with 1 worker:**
+- faster-whisper is CPU/GPU intensive
+- Running multiple transcriptions simultaneously causes memory pressure
+- Sequential processing is more predictable
+- Can increase workers if hardware allows
 
-#### `src/cesar/__init__.py`
-```python
-"""
-Cesar - Offline audio transcription using faster-whisper
-"""
-__version__ = "1.0.0"
-__all__ = ["AudioTranscriber", "cli"]
-
-from cesar.transcriber import AudioTranscriber
-```
-
-#### `src/cesar/__main__.py`
-```python
-"""
-Entry point for python -m cesar
-"""
-from cesar.cli import main
-
-if __name__ == "__main__":
-    main()
-```
-
-#### `pyproject.toml`
-```toml
-[build-system]
-requires = ["setuptools>=61.0", "wheel"]
-build-backend = "setuptools.build_meta"
-
-[project]
-name = "cesar"
-version = "1.0.0"
-description = "Offline audio transcription CLI using faster-whisper"
-readme = "README.md"
-license = {text = "MIT"}
-requires-python = ">=3.10"
-keywords = ["transcription", "whisper", "audio", "speech-to-text", "cli"]
-classifiers = [
-    "Development Status :: 4 - Beta",
-    "Environment :: Console",
-    "Intended Audience :: End Users/Desktop",
-    "License :: OSI Approved :: MIT License",
-    "Operating System :: OS Independent",
-    "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.10",
-    "Programming Language :: Python :: 3.11",
-    "Programming Language :: Python :: 3.12",
-    "Topic :: Multimedia :: Sound/Audio :: Speech",
-]
-
-dependencies = [
-    "faster-whisper>=1.0.0",
-    "click>=8.0.0",
-    "rich>=13.0.0",
-]
-
-[project.optional-dependencies]
-dev = [
-    "pytest>=7.0.0",
-    "pytest-asyncio>=0.21.0",
-    "black>=23.0.0",
-    "ruff>=0.1.0",
-    "mypy>=1.0.0",
-]
-cuda = [
-    "torch>=2.0.0",
-]
-
-[project.scripts]
-cesar = "cesar.cli:main"
-transcribe = "cesar.cli:main"  # Backward compat alias
-
-[project.urls]
-Homepage = "https://github.com/user/cesar"
-Documentation = "https://github.com/user/cesar#readme"
-Repository = "https://github.com/user/cesar.git"
-
-[tool.setuptools.packages.find]
-where = ["src"]
-
-[tool.pytest.ini_options]
-testpaths = ["tests"]
-python_files = ["test_*.py"]
-
-[tool.black]
-line-length = 100
-target-version = ["py310", "py311", "py312"]
-
-[tool.ruff]
-line-length = 100
-select = ["E", "F", "I", "UP"]
-
-[tool.mypy]
-python_version = "3.10"
-warn_return_any = true
-warn_unused_configs = true
-```
-
-## Entry Point Configuration
-
-### Console Scripts (Recommended)
-
-The `[project.scripts]` section in pyproject.toml creates console commands:
-
-```toml
-[project.scripts]
-cesar = "cesar.cli:main"
-```
-
-After `pip install .`:
-- User can run: `cesar input.mp3 -o output.txt`
-- Equivalent to: `python -m cesar input.mp3 -o output.txt`
-
-### Why Click's main() Works
-
-Click commands decorated with `@click.command()` are callable. The entry point calls the function directly:
+### FastAPI Lifespan Integration
 
 ```python
-# cesar/cli.py
-@click.command(name="transcribe")
-def main(...):
-    ...
+# app.py
+from contextlib import asynccontextmanager
+from fastapi import FastAPI
 
-# Entry point calls cesar.cli:main which invokes the Click command
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Startup: Initialize services
+    config = APIConfig.from_env()
+
+    repository = JobRepository(config.db_path)
+    await repository.init_db()
+
+    upload_manager = UploadManager(config.upload_path)
+
+    worker = BackgroundWorker(repository, upload_manager)
+    worker_task = asyncio.create_task(worker.run())
+
+    # Store in app state for route access
+    app.state.repository = repository
+    app.state.upload_manager = upload_manager
+    app.state.service = TranscriptionService(repository, upload_manager)
+
+    yield  # Application runs here
+
+    # Shutdown: Clean up
+    worker.stop()
+    await worker_task
+    worker.executor.shutdown(wait=True)
+
+app = FastAPI(lifespan=lifespan)
+```
+
+### Worker Loop Pattern
+
+```python
+# worker.py (continued)
+class BackgroundWorker:
+    async def run(self):
+        """Main worker loop - polls for pending jobs"""
+        self._running = True
+
+        while self._running:
+            try:
+                # Claim next pending job
+                job = await self.repository.claim_next_pending()
+
+                if job:
+                    try:
+                        result = await self.process_job(job)
+                        await self.repository.complete_job(job.id, result)
+
+                        # Webhook callback if configured
+                        if job.webhook_url:
+                            await self._send_webhook(job, result)
+
+                    except Exception as e:
+                        await self.repository.fail_job(job.id, str(e))
+
+                    finally:
+                        # Cleanup uploaded file (configurable)
+                        if self.auto_cleanup:
+                            await self.upload_manager.cleanup_job(job.id)
+                else:
+                    # No pending jobs, sleep before polling again
+                    await asyncio.sleep(1.0)
+
+            except asyncio.CancelledError:
+                break
+            except Exception as e:
+                # Log error but keep worker running
+                logger.error(f"Worker error: {e}")
+                await asyncio.sleep(5.0)
+
+    def stop(self):
+        """Signal worker to stop"""
+        self._running = False
+```
+
+## API Endpoint Design
+
+### POST /transcribe (File Upload)
+
+```python
+@router.post("/transcribe", status_code=202)
+async def create_transcription_job(
+    file: UploadFile = File(...),
+    model: str = Form("base"),
+    device: str = Form("auto"),
+    compute_type: str = Form("auto"),
+    webhook_url: Optional[str] = Form(None),
+    start_time: Optional[float] = Form(None),
+    end_time: Optional[float] = Form(None),
+    max_duration: Optional[int] = Form(None),
+    service: TranscriptionService = Depends(get_service),
+):
+    """Submit audio file for transcription"""
+    job = await service.create_job_from_upload(
+        file=file,
+        model=model,
+        device=device,
+        compute_type=compute_type,
+        webhook_url=webhook_url,
+        start_time=start_time,
+        end_time=end_time,
+        max_duration=max_duration,
+    )
+    return JobResponse(job_id=job.id, status=job.status)
+```
+
+### GET /jobs/{job_id}
+
+```python
+@router.get("/jobs/{job_id}")
+async def get_job_status(
+    job_id: str,
+    repository: JobRepository = Depends(get_repository),
+):
+    """Get job status and results"""
+    job = await repository.get_job(job_id)
+    if not job:
+        raise HTTPException(404, "Job not found")
+
+    response = JobStatusResponse(
+        job_id=job.id,
+        status=job.status,
+        created_at=job.created_at,
+        started_at=job.started_at,
+        completed_at=job.completed_at,
+    )
+
+    if job.status == JobStatus.COMPLETED:
+        response.result = job.result
+    elif job.status == JobStatus.FAILED:
+        response.error = job.error_message
+
+    return response
+```
+
+### CLI Integration: `cesar serve`
+
+```python
+# cli.py (add to existing)
+@cli.command(name="serve")
+@click.option("--host", default="127.0.0.1", help="Bind address")
+@click.option("--port", default=8000, type=int, help="Port number")
+@click.option("--reload", is_flag=True, help="Enable auto-reload (dev only)")
+def serve(host: str, port: int, reload: bool):
+    """Start the transcription API server"""
+    import uvicorn
+    from cesar.api.app import create_app
+
+    app = create_app()
+    uvicorn.run(
+        app,
+        host=host,
+        port=port,
+        reload=reload,
+    )
+```
+
+## Build Order
+
+### Suggested Implementation Sequence
+
+```
+Phase 1: Foundation (no HTTP yet)
+├── 1.1 Models and enums (cesar/api/models.py)
+├── 1.2 SQLite repository (cesar/api/repository.py)
+└── 1.3 Unit tests for repository
+
+Phase 2: File Handling
+├── 2.1 UploadManager (cesar/api/uploads.py)
+└── 2.2 Unit tests for uploads
+
+Phase 3: Background Worker
+├── 3.1 BackgroundWorker (cesar/api/worker.py)
+├── 3.2 Integration test: worker + repository
+└── 3.3 Verify AudioTranscriber integration
+
+Phase 4: HTTP Layer
+├── 4.1 FastAPI app factory (cesar/api/app.py)
+├── 4.2 TranscriptionService (cesar/api/service.py)
+├── 4.3 HTTP routes (cesar/api/routes.py)
+└── 4.4 Integration tests with TestClient
+
+Phase 5: CLI Integration
+├── 5.1 Add `cesar serve` command
+├── 5.2 Configuration from environment
+└── 5.3 End-to-end testing
+
+Phase 6: Polish
+├── 6.1 OpenAPI documentation customization
+├── 6.2 Error handling refinement
+└── 6.3 Webhook implementation
+```
+
+### Dependency Graph
+
+```
+models.py (no deps)
+    │
+    v
+repository.py (depends on: models)
+    │
+    v
+uploads.py (no internal deps)
+    │
+    v
+worker.py (depends on: repository, uploads, cesar.transcriber)
+    │
+    v
+service.py (depends on: repository, uploads, models)
+    │
+    v
+routes.py (depends on: service, models)
+    │
+    v
+app.py (depends on: routes, worker, lifespan setup)
+    │
+    v
+cli.py serve command (depends on: app)
+```
+
+## Configuration
+
+### Environment Variables
+
+```python
+# config.py
+from pydantic_settings import BaseSettings
+from pathlib import Path
+
+class APIConfig(BaseSettings):
+    # Database
+    db_path: Path = Path.home() / ".cesar" / "jobs.db"
+
+    # File storage
+    upload_path: Path = Path.home() / ".cesar" / "uploads"
+    max_upload_size_mb: int = 500
+    auto_cleanup: bool = True
+    retention_hours: int = 24
+
+    # Worker
+    worker_poll_interval: float = 1.0
+    max_concurrent_jobs: int = 1
+
+    # Server
+    host: str = "127.0.0.1"
+    port: int = 8000
+
+    class Config:
+        env_prefix = "CESAR_"
+```
+
+### Usage
+
+```bash
+# Default (localhost only)
+cesar serve
+
+# Custom port
+cesar serve --port 9000
+
+# All interfaces
+cesar serve --host 0.0.0.0
+
+# Via environment
+CESAR_PORT=9000 CESAR_MAX_UPLOAD_SIZE_MB=1000 cesar serve
 ```
 
 ## Patterns to Follow
 
-### Pattern 1: Lazy Loading Heavy Dependencies
+### Pattern 1: Atomic Job Claiming
 
-**What:** Defer importing heavy libraries until actually needed
-**When:** faster-whisper, torch are expensive to import
-**Example:**
-```python
-# transcriber.py - current pattern (good)
-def _load_model(self) -> None:
-    if self.model is not None:
-        return
-    from faster_whisper import WhisperModel  # Lazy import
-    self.model = WhisperModel(...)
+**Why:** Prevents multiple workers from processing the same job.
+
+```sql
+-- Atomic: SELECT + UPDATE in one statement
+UPDATE jobs
+SET status = 'PROCESSING', started_at = ?
+WHERE id = (
+    SELECT id FROM jobs
+    WHERE status = 'PENDING'
+    ORDER BY created_at
+    LIMIT 1
+)
+RETURNING *
 ```
 
-### Pattern 2: Version Single Source of Truth
+### Pattern 2: Graceful Shutdown
 
-**What:** Define version once in `__init__.py`, reference elsewhere
-**When:** Always
-**Example:**
+**Why:** Don't interrupt in-progress transcriptions.
+
 ```python
-# cesar/__init__.py
-__version__ = "1.0.0"
-
-# pyproject.toml uses dynamic versioning OR hardcoded (simpler)
-[project]
-version = "1.0.0"
-
-# cli.py
-from cesar import __version__
-
-@click.version_option(version=__version__, prog_name="cesar")
-def main(...):
+async def shutdown(self):
+    self._running = False
+    # Wait for current job to finish (if any)
+    # Don't forcefully kill transcription
 ```
 
-### Pattern 3: Optional Dependencies with Graceful Fallback
+### Pattern 3: Streaming File Upload
 
-**What:** Handle missing optional packages gracefully
-**When:** torch is optional for CPU-only usage
-**Current pattern (good):**
+**Why:** Don't load entire file into memory.
+
 ```python
-# device_detection.py
-def _check_cuda(self) -> bool:
-    try:
-        import torch
-        return torch.cuda.is_available()
-    except ImportError:
-        # Fallback to nvidia-smi check
-        ...
+async with aiofiles.open(path, 'wb') as out:
+    while chunk := await file.read(8192):
+        await out.write(chunk)
 ```
 
 ## Anti-Patterns to Avoid
 
-### Anti-Pattern 1: Relative Imports in Package
+### Anti-Pattern 1: Blocking the Event Loop
 
-**What:** Using `from .transcriber import ...` inconsistently
-**Why bad:** Can cause confusion between development and installed versions
-**Instead:** Use explicit absolute imports: `from cesar.transcriber import ...`
-
-### Anti-Pattern 2: Hardcoded Paths
-
-**What:** Using `Path(__file__).parent / "assets"` for package data
-**Why bad:** Doesn't work with installed packages
-**Instead:** Use `importlib.resources` for package data:
+**Wrong:**
 ```python
-from importlib import resources
-with resources.files("cesar").joinpath("data/file.txt").open() as f:
+@router.post("/transcribe")
+async def transcribe(file: UploadFile):
+    result = transcriber.transcribe_file(...)  # BLOCKS!
+    return result
+```
+
+**Right:**
+```python
+@router.post("/transcribe")
+async def transcribe(file: UploadFile):
+    job = await service.create_job(...)  # Returns immediately
+    return {"job_id": job.id}  # Client polls for result
+```
+
+### Anti-Pattern 2: In-Memory Job State
+
+**Wrong:**
+```python
+jobs = {}  # Lost on restart!
+```
+
+**Right:**
+```python
+# Use SQLite for persistence
+await repository.create_job(job)
+```
+
+### Anti-Pattern 3: Synchronous Database Access in Async Routes
+
+**Wrong:**
+```python
+import sqlite3
+conn = sqlite3.connect(...)  # Blocks!
+```
+
+**Right:**
+```python
+import aiosqlite
+async with aiosqlite.connect(...) as db:
     ...
 ```
 
-### Anti-Pattern 3: Multiple Entry Points with Duplicated Code
-
-**What:** Having both `transcribe.py` and `__main__.py` with similar code
-**Why bad:** Maintenance burden, potential for divergence
-**Instead:** Single entry point in `cli.py`, thin wrappers only
-
-## Build Order Implications
-
-### Phase 1: Project Structure (do first)
-1. Create `src/cesar/` directory
-2. Move source files with updated imports
-3. Create `__init__.py` and `__main__.py`
-4. Create `pyproject.toml`
-
-### Phase 2: Test Migration (do second)
-1. Consolidate tests into `tests/`
-2. Update test imports to use installed package
-3. Create `conftest.py` for shared fixtures
-4. Verify tests pass with `pip install -e .`
-
-### Phase 3: Entry Points (do third)
-1. Add `[project.scripts]` to pyproject.toml
-2. Remove old `transcribe.py` entry point
-3. Test `cesar` and `transcribe` commands work
-
-### Phase 4: CI/CD Integration (do last)
-1. Add GitHub Actions for testing
-2. Add PyPI publishing workflow
-3. Add version tagging
-
-**Critical dependency:** Tests MUST run against installed package (`pip install -e .`), not local imports. This is enforced by src layout.
-
 ## Scalability Considerations
 
-| Concern | Current State | After Restructure |
-|---------|--------------|-------------------|
-| Adding subcommands | Would need manual routing | Click groups: `@cli.group()` |
-| Plugin architecture | Not possible | Entry points: `[project.entry-points."cesar.plugins"]` |
-| Multiple output formats | Hardcoded in cli.py | Separate formatters in `cesar/formatters/` |
-| Configuration files | Not supported | Add `cesar/config.py` with TOML/YAML support |
+| Load Level | Architecture | Notes |
+|------------|--------------|-------|
+| Single user | Default config | 1 worker, sequential jobs |
+| Light team use | Increase workers | 2-4 workers if GPU has memory |
+| Heavy use | Multiple processes | Run multiple `cesar serve` instances behind nginx |
+| Enterprise | External queue | Graduate to Redis + Celery, reuse service layer |
 
-## Testing Strategy
-
-### Recommended Test Structure
-
-```
-tests/
-├── __init__.py
-├── conftest.py           # Shared fixtures
-├── test_cli.py           # CLI integration tests
-├── test_transcriber.py   # Core transcription tests
-├── test_device_detection.py
-├── test_utils.py
-└── fixtures/
-    └── sample_audio.m4a  # Small test file
-```
-
-### Test Fixture Example (conftest.py)
-
-```python
-import pytest
-from pathlib import Path
-
-@pytest.fixture
-def sample_audio():
-    """Path to sample audio file for testing"""
-    return Path(__file__).parent / "fixtures" / "sample_audio.m4a"
-
-@pytest.fixture
-def tmp_output(tmp_path):
-    """Temporary output file path"""
-    return tmp_path / "output.txt"
-```
+The architecture is designed to grow:
+- `TranscriptionService` can be reused with different queue backends
+- `JobRepository` interface could swap SQLite for PostgreSQL
+- Worker pattern scales to distributed processing
 
 ## Sources
 
-- Python Packaging Authority (PyPA) tutorials and guides
-- PEP 517 (build system interface)
-- PEP 518 (pyproject.toml build requirements)
-- PEP 621 (project metadata in pyproject.toml)
-- setuptools documentation
+- [FastAPI Lifespan Events](https://fastapi.tiangolo.com/advanced/events/) - Official documentation for async context manager pattern
+- [FastAPI Concurrency and async/await](https://fastapi.tiangolo.com/async/) - Official guidance on blocking code
+- [FastAPI Background Tasks](https://fastapi.tiangolo.com/tutorial/background-tasks/) - Built-in task handling
+- [aiosqlite GitHub](https://github.com/omnilib/aiosqlite) - Async SQLite library
+- [litequeue](https://github.com/litements/litequeue) - SQLite-based queue pattern reference
+- [FastAPI Best Practices](https://github.com/zhanymkanov/fastapi-best-practices) - Community patterns
 
-**Confidence note:** This document is based on training data as of May 2025. The patterns described are well-established (PEP 621 finalized in 2021), but specific pyproject.toml syntax should be verified against current setuptools/PyPA documentation before implementation.
+**Confidence Assessment:**
+- Component design: HIGH (follows established FastAPI patterns)
+- SQLite schema: HIGH (standard patterns)
+- Worker pattern: MEDIUM (custom implementation, needs testing)
+- File handling: HIGH (standard patterns)
