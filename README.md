@@ -10,6 +10,8 @@ A command-line tool for transcribing audio files to text using OpenAI's Whisper 
 - **GPU Acceleration**: Automatic Metal Performance Shaders (MPS) on macOS Sequoia+
 - **Memory Efficient**: Handles large audio files using streaming segments
 - **Multiple Formats**: Supports mp3, wav, m4a, ogg, flac, aac, wma
+- **Two Interfaces**: CLI for direct use, HTTP API for integration
+- **Async Job Queue**: Persistent job queue with crash recovery for API server
 - **Simple Interface**: Single command execution with clear progress feedback
 - **Configurable Threading**: Auto-detect CPU cores or manual thread specification
 
@@ -93,6 +95,168 @@ cesar transcribe podcast.mp3 -o podcast.txt --verbose
 # Quiet mode (minimal output)
 cesar transcribe recording.wav -o recording.txt --quiet
 ```
+
+## HTTP API Server
+
+Cesar v2.0+ includes an HTTP API server for programmatic access and integration with other services.
+
+### Starting the Server
+
+```bash
+cesar serve
+```
+
+By default, the server listens on `http://127.0.0.1:5000`.
+
+### Server Options
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--port, -p` | 5000 | Port to bind to |
+| `--host, -h` | 127.0.0.1 | Host to bind to (use 0.0.0.0 for external access) |
+| `--reload` | off | Enable auto-reload for development |
+| `--workers` | 1 | Number of uvicorn workers |
+
+Example with custom options:
+```bash
+cesar serve --port 8080 --host 0.0.0.0 --workers 4
+```
+
+### API Documentation
+
+Interactive API documentation is available at `/docs` when the server is running:
+- Swagger UI: `http://localhost:5000/docs`
+
+## API Endpoints
+
+### Health Check
+
+```bash
+GET /health
+```
+
+Returns server health status and worker state.
+
+```bash
+curl http://localhost:5000/health
+```
+
+Response:
+```json
+{
+  "status": "healthy",
+  "worker": "running"
+}
+```
+
+### Submit Transcription (File Upload)
+
+```bash
+POST /transcribe
+```
+
+Upload an audio file for transcription. Returns immediately with a job ID.
+
+```bash
+curl -X POST http://localhost:5000/transcribe \
+  -F "file=@recording.mp3" \
+  -F "model=base"
+```
+
+Response (HTTP 202 Accepted):
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "queued",
+  "audio_path": "/tmp/cesar/550e8400.mp3",
+  "model_size": "base",
+  "created_at": "2024-01-15T10:30:00Z",
+  "started_at": null,
+  "completed_at": null,
+  "result_text": null,
+  "detected_language": null,
+  "error_message": null
+}
+```
+
+### Submit Transcription (URL)
+
+```bash
+POST /transcribe/url
+```
+
+Download audio from a URL and transcribe it.
+
+```bash
+curl -X POST http://localhost:5000/transcribe/url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://example.com/audio.mp3", "model": "base"}'
+```
+
+### Get Job Status
+
+```bash
+GET /jobs/{job_id}
+```
+
+Retrieve the status and results of a specific job.
+
+```bash
+curl http://localhost:5000/jobs/550e8400-e29b-41d4-a716-446655440000
+```
+
+Response (completed job):
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "completed",
+  "audio_path": "/tmp/cesar/550e8400.mp3",
+  "model_size": "base",
+  "created_at": "2024-01-15T10:30:00Z",
+  "started_at": "2024-01-15T10:30:01Z",
+  "completed_at": "2024-01-15T10:31:45Z",
+  "result_text": "This is the transcribed text...",
+  "detected_language": "en",
+  "error_message": null
+}
+```
+
+### List Jobs
+
+```bash
+GET /jobs
+GET /jobs?status=queued
+```
+
+List all jobs, optionally filtered by status.
+
+```bash
+# List all jobs
+curl http://localhost:5000/jobs
+
+# List only completed jobs
+curl "http://localhost:5000/jobs?status=completed"
+```
+
+Valid status values: `queued`, `processing`, `completed`, `error`
+
+## Job Queue
+
+Transcription jobs are processed asynchronously through a persistent job queue.
+
+### Job Lifecycle
+
+1. **queued**: Job submitted, waiting for worker
+2. **processing**: Worker is actively transcribing
+3. **completed**: Transcription finished, results available
+4. **error**: Transcription failed, error message available
+
+### Persistence and Recovery
+
+- Jobs are stored in SQLite at `~/.local/share/cesar/jobs.db`
+- Jobs persist across server restarts
+- Jobs left in `processing` state after a crash are automatically re-queued on startup
+- Completed job results remain available until manually cleared
 
 ## Output
 
