@@ -6,6 +6,7 @@ import time
 from pathlib import Path
 
 import click
+import uvicorn
 from rich.console import Console
 from rich.progress import (
     Progress,
@@ -309,6 +310,29 @@ def transcribe(input_file, output, model, device, compute_type, batch_size, num_
             console.print(f"[dim]{trace}[/dim]")
             click.echo(trace, err=True)
         return 1
+
+
+@cli.command(name="serve")
+@click.option('--port', '-p', type=int, default=5000, show_default=True, help='Port to bind to')
+@click.option('--host', '-h', default='127.0.0.1', show_default=True, help='Host to bind to')
+@click.option('--reload', is_flag=True, help='Enable auto-reload for development')
+@click.option('--workers', type=int, default=1, show_default=True, help='Number of uvicorn workers')
+def serve(port, host, reload, workers):
+    """Start the Cesar HTTP API server."""
+    # Print startup message (minimal per CONTEXT.md)
+    console.print(f"Listening on http://{host}:{port}")
+
+    # Start server (blocks until shutdown)
+    uvicorn.run(
+        "cesar.api.server:app",  # Import string required for reload
+        host=host,
+        port=port,
+        reload=reload,
+        workers=workers,
+        log_level="info",
+        access_log=True,
+        timeout_graceful_shutdown=30,
+    )
 
 
 if __name__ == "__main__":

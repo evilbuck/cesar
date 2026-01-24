@@ -49,6 +49,15 @@ async def lifespan(app: FastAPI):
     repo = JobRepository(db_path)
     await repo.connect()
 
+    # Re-queue any jobs left in "processing" state (from unclean shutdown)
+    all_jobs = await repo.list_all()
+    for job in all_jobs:
+        if job.status == JobStatus.PROCESSING:
+            logger.warning(f"Re-queuing orphaned job {job.id}")
+            job.status = JobStatus.QUEUED
+            job.started_at = None
+            await repo.update(job)
+
     logger.info("Starting background worker")
     worker = BackgroundWorker(repo)
     worker_task = asyncio.create_task(worker.run())
