@@ -8,17 +8,23 @@ from pathlib import Path
 import click
 from rich.console import Console
 from rich.progress import (
-    Progress, 
-    SpinnerColumn, 
-    TextColumn, 
-    BarColumn, 
+    Progress,
+    SpinnerColumn,
+    TextColumn,
+    BarColumn,
     TaskProgressColumn,
     TimeElapsedColumn,
     TimeRemainingColumn
 )
 
-from transcriber import AudioTranscriber
-from utils import format_time, estimate_processing_time
+from cesar.transcriber import AudioTranscriber
+from cesar.utils import format_time, estimate_processing_time
+
+try:
+    from importlib.metadata import version
+    __version__ = version("cesar")
+except Exception:
+    __version__ = "0.0.0"
 
 
 # Create console for rich output
@@ -27,13 +33,13 @@ console = Console()
 
 class ProgressTracker:
     """Track and display transcription progress"""
-    
+
     def __init__(self, show_progress: bool = True):
         self.show_progress = show_progress
         self.progress = None
         self.task_id = None
         self.last_update = time.time()
-        
+
     def __enter__(self):
         if self.show_progress:
             self.progress = Progress(
@@ -48,11 +54,11 @@ class ProgressTracker:
             self.progress.__enter__()
             self.task_id = self.progress.add_task("Transcribing audio...", total=100)
         return self
-        
+
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.progress:
             self.progress.__exit__(exc_type, exc_val, exc_tb)
-    
+
     def update(self, progress_percentage: float, segment_count: int, elapsed_time: float):
         """Update progress display"""
         if self.progress and self.task_id is not None:
@@ -67,7 +73,14 @@ class ProgressTracker:
                 self.last_update = current_time
 
 
-@click.command(name="transcribe")
+@click.group()
+@click.version_option(version=__version__, prog_name="cesar")
+def cli():
+    """Cesar: Offline audio transcription using faster-whisper"""
+    pass
+
+
+@cli.command(name="transcribe")
 @click.argument(
     'input_file',
     type=click.Path(exists=True, readable=True, path_type=Path),
@@ -135,13 +148,12 @@ class ProgressTracker:
     type=click.FloatRange(min=0),
     help='End transcription at N seconds'
 )
-@click.version_option(version="1.0.0", prog_name="transcribe")
-def main(input_file, output, model, device, compute_type, batch_size, num_workers, verbose, quiet, max_duration, start_time, end_time):
+def transcribe(input_file, output, model, device, compute_type, batch_size, num_workers, verbose, quiet, max_duration, start_time, end_time):
     """
     Transcribe audio files to text using faster-whisper (offline)
-    
+
     INPUT_FILE: Path to the audio file to transcribe
-    
+
     Supported audio formats: MP3, WAV, M4A, OGG, FLAC, AAC, WMA
     """
     # Validate time parameter combinations first, before any operations
@@ -150,23 +162,23 @@ def main(input_file, output, model, device, compute_type, batch_size, num_worker
         console.print(f"[red]{error_msg}[/red]")
         click.echo(error_msg, err=True)
         sys.exit(1)
-    
+
     # Calculate end time if start-time and max-duration are both provided
     if start_time is not None and max_duration is not None:
         calculated_end_time = start_time + (max_duration * 60)
         end_time = calculated_end_time
-    
+
     if start_time is not None and end_time is not None and start_time >= end_time:
         error_msg = "Error: --start-time must be less than --end-time"
         console.print(f"[red]{error_msg}[/red]")
         click.echo(error_msg, err=True)
         sys.exit(1)
-    
+
     try:
         # Set console quiet mode
         if quiet:
             console.quiet = True
-        
+
         # Create transcriber instance
         transcriber = AudioTranscriber(
             model_size=model.lower(),
@@ -175,20 +187,20 @@ def main(input_file, output, model, device, compute_type, batch_size, num_worker
             batch_size=batch_size,
             num_workers=num_workers
         )
-        
+
         # Validate inputs and get basic info
         if not quiet:
-            console.print(f"✓ Input file validated: [green]{input_file}[/green]")
-        
+            console.print(f"[green]Input file validated:[/green] {input_file}")
+
         # Get audio duration for estimation
         try:
             duration = transcriber.get_audio_duration(str(input_file))
             if not quiet:
-                console.print(f"✓ Audio duration: [blue]{format_time(duration)}[/blue]")
+                console.print(f"[blue]Audio duration:[/blue] {format_time(duration)}")
         except Exception as e:
             console.print(f"[yellow]Warning: Could not determine audio duration: {e}[/yellow]")
             duration = 0
-        
+
         # Show model information if verbose
         if verbose:
             model_info = transcriber.get_model_info()
@@ -198,7 +210,7 @@ def main(input_file, output, model, device, compute_type, batch_size, num_worker
             console.print(f"  Compute type: [cyan]{model_info['compute_type']}[/cyan]")
             console.print(f"  Batch size: [cyan]{model_info['batch_size']}[/cyan]")
             console.print(f"  Worker threads: [cyan]{model_info['num_workers']}[/cyan]")
-            
+
             # Show device capabilities
             caps = model_info['capabilities']
             console.print("\n[bold]Device Capabilities:[/bold]")
@@ -209,26 +221,26 @@ def main(input_file, output, model, device, compute_type, batch_size, num_worker
                 console.print(f"  GPU memory: [cyan]{caps['gpu_memory_mb']} MB[/cyan]")
             console.print(f"  Apple MPS available: [cyan]{caps['has_mps']}[/cyan]")
             console.print(f"  CPU cores: [cyan]{caps['cpu_cores']}[/cyan]")
-            
+
             if duration > 0:
                 estimated_time = estimate_processing_time(duration, model_info['model_size'])
                 console.print(f"\n  Estimated processing time: [yellow]{format_time(estimated_time)}[/yellow]")
             console.print()
-        
+
         # Validate output path
         transcriber.validate_output_path(str(output))
         if not quiet:
-            console.print(f"✓ Output path validated: [green]{output}[/green]")
-        
+            console.print(f"[green]Output path validated:[/green] {output}")
+
         # Set up progress tracking
         progress_tracker = ProgressTracker(show_progress=not quiet)
-        
+
         # Start transcription
         if not quiet:
             console.print(f"\n[bold]Loading Whisper model '{model}'...[/bold]")
-        
+
         transcription_start_time = time.time()
-        
+
         with progress_tracker:
             # Transcribe the file
             result = transcriber.transcribe_file(
@@ -239,10 +251,10 @@ def main(input_file, output, model, device, compute_type, batch_size, num_worker
                 start_time_seconds=start_time,
                 end_time_seconds=end_time
             )
-        
+
         # Show results
         if not quiet:
-            console.print(f"\n[bold green]✓ Transcription completed![/bold green]")
+            console.print(f"\n[bold green]Transcription completed![/bold green]")
             console.print(f"  Language: [cyan]{result['language']}[/cyan] (probability: {result['language_probability']:.2f})")
             console.print(f"  Audio duration: [blue]{format_time(result['audio_duration'])}[/blue]")
             console.print(f"  Processing time: [blue]{format_time(result['processing_time'])}[/blue]")
@@ -252,9 +264,9 @@ def main(input_file, output, model, device, compute_type, batch_size, num_worker
         else:
             # Minimal output for quiet mode
             console.print(f"Transcription completed: {result['output_path']}")
-        
+
         return 0
-        
+
     except FileNotFoundError as e:
         error_msg = f"Error: {e}"
         console.print(f"[red]{error_msg}[/red]")
@@ -300,4 +312,4 @@ def main(input_file, output, model, device, compute_type, batch_size, num_worker
 
 
 if __name__ == "__main__":
-    sys.exit(main())
+    sys.exit(cli())

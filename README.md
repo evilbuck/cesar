@@ -1,4 +1,4 @@
-# Offline Audio Transcriber
+# Cesar - Offline Audio Transcriber
 
 A command-line tool for transcribing audio files to text using OpenAI's Whisper technology via the faster-whisper library. Designed for completely offline operation after initial setup.
 
@@ -19,49 +19,51 @@ A command-line tool for transcribing audio files to text using OpenAI's Whisper 
    ```bash
    # macOS (using Homebrew)
    brew install ffmpeg
-   
+
    # Ubuntu/Debian
    sudo apt update && sudo apt install ffmpeg
-   
-   # Windows (using Chocolatey)
-   choco install ffmpeg
    ```
 
-2. **Install Python dependencies:**
+2. **Install cesar:**
    ```bash
-   pip install -r requirements.txt
+   # From git repository
+   pipx install git+https://github.com/yourusername/cesar.git
+
+   # Or from local clone
+   git clone https://github.com/yourusername/cesar.git
+   cd cesar
+   pipx install .
    ```
 
-3. **Make the script executable:**
+3. **Verify installation:**
    ```bash
-   chmod +x transcribe.py
-   ```
-
-4. **Pre-download models (optional but recommended):**
-   ```python
-   python -c "from faster_whisper import WhisperModel; WhisperModel('base')"
+   cesar --version
+   cesar --help
    ```
 
 ## Usage
 
 ### Basic Usage
 ```bash
-./transcribe.py input.mp3 -o output.txt
+cesar transcribe input.mp3 -o output.txt
 ```
 
 ### With Custom Model Size
 ```bash
-./transcribe.py input.wav -o transcript.txt --model small
+cesar transcribe input.wav -o transcript.txt --model small
 ```
 
 ### Available Options
 
-- `input_file`: Path to the audio file to transcribe (required)
+Run `cesar transcribe --help` to see all options:
+
+- `INPUT_FILE`: Path to the audio file to transcribe (required)
 - `-o, --output`: Path for the output text file (required)
 - `--model`: Whisper model size - tiny, base, small, medium, large (default: base)
-- `--threads N`: Number of threads for parallel processing (default: auto-detect)
-- `--chunk-size N`: Chunk size in minutes for parallel processing (default: 10)
-- `--no-parallel`: Disable parallel processing even for long files
+- `--device`: Force specific device - auto, cpu, cuda, mps (default: auto)
+- `--compute-type`: Force compute type - auto, float32, float16, int8 (default: auto)
+- `-v, --verbose`: Show detailed system information
+- `-q, --quiet`: Suppress progress display
 
 ## Model Sizes
 
@@ -77,19 +79,19 @@ A command-line tool for transcribing audio files to text using OpenAI's Whisper 
 
 ```bash
 # Basic transcription
-./transcribe.py meeting.mp3 -o meeting_transcript.txt
+cesar transcribe meeting.mp3 -o meeting_transcript.txt
 
 # High accuracy transcription
-./transcribe.py interview.wav -o interview.txt --model large
+cesar transcribe interview.wav -o interview.txt --model large
 
 # Quick transcription
-./transcribe.py note.m4a -o note.txt --model tiny
+cesar transcribe note.m4a -o note.txt --model tiny
 
-# Parallel processing with custom settings
-./transcribe.py long_lecture.mp3 -o lecture.txt --threads 4 --chunk-size 15
+# Verbose output with system info
+cesar transcribe podcast.mp3 -o podcast.txt --verbose
 
-# Disable parallel processing for long files
-./transcribe.py webinar.wav -o webinar.txt --no-parallel
+# Quiet mode (minimal output)
+cesar transcribe recording.wav -o recording.txt --quiet
 ```
 
 ## Output
@@ -113,8 +115,8 @@ Processed 10 segments (15.2s elapsed)
 
 ## System Requirements
 
-- **Platform**: macOS Sequoia or higher (for Metal GPU acceleration)
-- **Python**: 3.8 or higher
+- **Platform**: macOS or Linux (Metal GPU acceleration on macOS, CUDA on Linux)
+- **Python**: 3.10 or higher
 - **Memory**: Varies by model size and audio file length
 - **Storage**: Model cache requires 39MB - 1.5GB depending on model
 
@@ -154,10 +156,18 @@ The tool provides clear error messages for common issues:
 - Try a smaller model size (tiny, base, small)
 - Ensure Metal GPU acceleration is available on macOS
 
-## Testing
+## Development
 
-Run the test suite to verify functionality:
+### Running Tests
 
 ```bash
 python -m pytest tests/ -v
-```# py_transcribe
+```
+
+### Installing for Development
+
+```bash
+git clone https://github.com/yourusername/cesar.git
+cd cesar
+pip install -e .
+```

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "cesar"
+version = "1.0.0"
+description = "Offline audio transcription CLI using faster-whisper"
+readme = "README.md"
+requires-python = ">=3.10"
+dependencies = [
+    "click>=8.0.0",
+    "rich>=13.0.0",
+    "faster-whisper>=1.0.0",
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Environment :: Console",
+]
+
+[project.scripts]
+cesar = "cesar.cli:cli"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["cesar*"]

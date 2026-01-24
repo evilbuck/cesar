@@ -7,10 +7,10 @@ from typing import Union
 def format_time(seconds: Union[int, float]) -> str:
     """
     Format seconds into human-readable time string
-    
+
     Args:
         seconds: Time in seconds
-        
+
     Returns:
         Formatted time string (e.g., "45s", "2m 5s", "1h 2m 5s")
     """
@@ -30,13 +30,13 @@ def format_time(seconds: Union[int, float]) -> str:
 def validate_model_size(model_size: str) -> str:
     """
     Validate Whisper model size
-    
+
     Args:
         model_size: Model size string
-        
+
     Returns:
         Validated model size
-        
+
     Raises:
         ValueError: If model size is not supported
     """
@@ -49,13 +49,13 @@ def validate_model_size(model_size: str) -> str:
 def validate_device(device: str) -> str:
     """
     Validate device option
-    
+
     Args:
         device: Device string
-        
+
     Returns:
         Validated device
-        
+
     Raises:
         ValueError: If device is not supported
     """
@@ -68,13 +68,13 @@ def validate_device(device: str) -> str:
 def validate_compute_type(compute_type: str) -> str:
     """
     Validate compute type option
-    
+
     Args:
         compute_type: Compute type string
-        
+
     Returns:
         Validated compute type
-        
+
     Raises:
         ValueError: If compute type is not supported
     """
@@ -87,10 +87,10 @@ def validate_compute_type(compute_type: str) -> str:
 def get_file_size_mb(file_path: str) -> float:
     """
     Get file size in megabytes
-    
+
     Args:
         file_path: Path to file
-        
+
     Returns:
         File size in MB
     """
@@ -104,11 +104,11 @@ def get_file_size_mb(file_path: str) -> float:
 def estimate_processing_time(duration_seconds: float, model_size: str) -> float:
     """
     Estimate processing time based on audio duration and model size
-    
+
     Args:
         duration_seconds: Audio duration in seconds
         model_size: Whisper model size
-        
+
     Returns:
         Estimated processing time in seconds
     """
@@ -120,6 +120,6 @@ def estimate_processing_time(duration_seconds: float, model_size: str) -> float:
         "medium": 6.0,   # 6x faster than real-time
         "large": 4.0     # 4x faster than real-time
     }
-    
+
     ratio = speed_ratios.get(model_size, 10.0)
     return duration_seconds / ratio
