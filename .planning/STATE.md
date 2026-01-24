@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-23)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Phase 4 - HTTP API (in progress)
+**Current focus:** Phase 5 - CLI Integration (in progress)
 
 ## Current Position
 
 Milestone: v2.0 API
-Phase: 4 of 5 (HTTP API)
-Plan: 3 of 3 in current phase
+Phase: 5 of 5 (CLI Integration)
+Plan: 1 of 1 in current phase
 Status: Phase complete
-Last activity: 2026-01-23 - Completed 04-03-PLAN.md
+Last activity: 2026-01-23 - Completed 05-01-PLAN.md
 
-Progress: [█████████░] 100% (v2.0: 9/9 plans - Phase 4 complete)
+Progress: [██████████] 100% (v2.0: 10/10 plans - Phase 5 complete)
 
 ## Performance Metrics
 
@@ -31,7 +31,9 @@ Progress: [█████████░] 100% (v2.0: 9/9 plans - Phase 4 compl
 | 2. Foundation | 2/2 | 4 min | 2 min |
 | 3. Background Worker | 1/1 | 2 min | 2 min |
 | 4. HTTP API | 3/3 | 10 min | 3 min |
-| 5. CLI Integration | 0/? | - | - |
+| 5. CLI Integration | 1/1 | 2 min | 2 min |
+
+**v2.0 Total:** 10 plans, 18 min, 1.8 min/plan
 
 *Updated after each plan completion*
 
@@ -65,6 +67,10 @@ Recent decisions affecting current work:
 - [04-03]: Separate endpoints /transcribe (file upload) and /transcribe/url (URL download)
 - [04-03]: MAX_FILE_SIZE = 100MB, URL_TIMEOUT = 60s
 - [04-03]: Extension whitelist for audio files
+- [05-01]: Import string for reload support (not app instance)
+- [05-01]: Clear started_at when re-queuing orphaned jobs
+- [05-01]: 30-second graceful shutdown timeout
+- [05-01]: Minimal startup message (just listening URL)
 
 ### Pending Todos
 
@@ -76,8 +82,8 @@ None yet.
 
 ## Session Continuity
 
-Last session: 2026-01-23T23:42:26Z
-Stopped at: Completed 04-03-PLAN.md (Job Submission Endpoints)
+Last session: 2026-01-23T16:22:54Z
+Stopped at: Completed 05-01-PLAN.md (CLI Server Integration)
 Resume file: None
 
 ## v1.0 Summary
@@ -100,6 +106,7 @@ Shipped 2026-01-23:
 | 04-01 | FastAPI Server | 2 min | f336179, b0a5618, f8ff2aa |
 | 04-02 | Job GET Endpoints | 4 min | 5d2aea1, 3be2928, f475e51 |
 | 04-03 | Job Submission Endpoints | 4 min | b15148b, 41ca8be, e0bbc69 |
+| 05-01 | CLI Server Integration | 2 min | 5203257, 0d2176f |
 
 ### Phase 2 Verified
 
@@ -151,6 +158,26 @@ All must-haves verified (13/13):
 - Validation for file size/type
 - Error handling for downloads
 
-### Next Up
+### Phase 5 Progress
 
-Phase 5: CLI Integration
+Plan 01 complete (4/4 must-haves verified):
+- cesar serve starts HTTP server on default port 5000
+- cesar serve --port 8080 starts server on port 8080
+- cesar serve --help shows available options
+- Orphaned processing jobs are re-queued on startup
+
+### Phase 5 Verified
+
+All must-haves verified (4/4):
+- CLI server command working
+- Job recovery on startup
+- Comprehensive test coverage
+- All 124 tests passing
+
+### v2.0 Complete
+
+Phase 5 (CLI Integration) complete. v2.0 milestone achieved:
+- HTTP API with async job queue
+- cesar serve command
+- Job recovery on startup
+- All functionality tested and verified
