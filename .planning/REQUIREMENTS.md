@@ -33,8 +33,8 @@ Requirements for the API milestone. Each maps to roadmap phases.
 
 ### Server
 
-- [ ] **SRV-01**: `cesar serve` command starts HTTP server
-- [ ] **SRV-02**: `cesar serve --port` option configures port
+- [x] **SRV-01**: `cesar serve` command starts HTTP server
+- [x] **SRV-02**: `cesar serve --port` option configures port
 - [x] **SRV-03**: OpenAPI/Swagger docs available at /docs
 
 ## v2.1+ Requirements
@@ -95,8 +95,8 @@ Which phases cover which requirements. Updated during roadmap creation.
 | JOB-07 | Phase 2 | Complete |
 | RES-01 | Phase 2 | Complete |
 | RES-02 | Phase 2 | Complete |
-| SRV-01 | Phase 5 | Pending |
-| SRV-02 | Phase 5 | Pending |
+| SRV-01 | Phase 5 | Complete |
+| SRV-02 | Phase 5 | Complete |
 | SRV-03 | Phase 4 | Complete |
 
 **Coverage:**
@@ -106,4 +106,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-01-23*
-*Last updated: 2026-01-23 after Phase 4 completion*
+*Last updated: 2026-01-23 after Phase 5 completion - v2.0 complete*

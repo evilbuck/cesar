@@ -18,7 +18,7 @@ This milestone adds an HTTP API layer to Cesar, enabling programmatic transcript
 - [x] **Phase 2: Foundation** - Job models and SQLite repository
 - [x] **Phase 3: Background Worker** - Sequential job processor
 - [x] **Phase 4: HTTP API** - FastAPI endpoints and file handling
-- [ ] **Phase 5: CLI Integration** - cesar serve command
+- [x] **Phase 5: CLI Integration** - cesar serve command
 
 ## Phase Details
 
@@ -80,7 +80,7 @@ Plans:
 **Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 05-01-PLAN.md - Add cesar serve command with uvicorn and job recovery
+- [x] 05-01-PLAN.md - Add cesar serve command with uvicorn and job recovery
 
 ## Progress
 
@@ -92,4 +92,4 @@ Phases execute in numeric order: 2 -> 3 -> 4 -> 5
 | 2. Foundation | 2/2 | Complete | 2026-01-23 |
 | 3. Background Worker | 1/1 | Complete | 2026-01-23 |
 | 4. HTTP API | 3/3 | Complete | 2026-01-23 |
-| 5. CLI Integration | 0/1 | Not started | - |
+| 5. CLI Integration | 1/1 | Complete | 2026-01-23 |

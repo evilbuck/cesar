@@ -5,7 +5,7 @@
 See: .planning/PROJECT.md (updated 2026-01-23)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Phase 5 - CLI Integration (in progress)
+**Current focus:** v2.0 API milestone complete
 
 ## Current Position
 
