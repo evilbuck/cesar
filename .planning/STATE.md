@@ -2,20 +2,20 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-23)
+See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Planning next milestone
+**Current focus:** Milestone v2.1 — CLI Refactor
 
 ## Current Position
 
-Milestone: v2.0 API complete
-Phase: Ready for next milestone
-Plan: Not started
-Status: v2.0 shipped, ready for /gsd:new-milestone
-Last activity: 2026-01-23 — v2.0 milestone archived
+Milestone: v2.1 CLI Refactor
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-01-24 — Milestone v2.1 started
 
-Progress: [██████████] 100% (v2.0: shipped)
+Progress: [░░░░░░░░░░] 0% (v2.1: requirements phase)
 
 ## Performance Metrics
 
@@ -42,8 +42,8 @@ None.
 
 ## Session Continuity
 
-Last session: 2026-01-23
-Stopped at: v2.0 milestone archived
+Last session: 2026-01-24
+Stopped at: Milestone v2.1 started
 Resume file: None
 
 ## Milestone History
@@ -54,4 +54,4 @@ Resume file: None
 See `.planning/MILESTONES.md` for full details.
 
 ---
-*Next: `/gsd:new-milestone` to start planning v2.1 or v3.0*
+*Next: Define requirements, then create roadmap*
