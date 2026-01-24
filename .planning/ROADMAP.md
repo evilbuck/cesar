@@ -77,10 +77,10 @@ Plans:
   1. `cesar serve` starts HTTP server on default port
   2. `cesar serve --port 8080` starts server on specified port
   3. `cesar serve --help` shows available options
-**Plans**: TBD
+**Plans**: 1 plan in 1 wave
 
 Plans:
-- [ ] 05-01: TBD
+- [ ] 05-01-PLAN.md - Add cesar serve command with uvicorn and job recovery
 
 ## Progress
 
@@ -92,4 +92,4 @@ Phases execute in numeric order: 2 -> 3 -> 4 -> 5
 | 2. Foundation | 2/2 | Complete | 2026-01-23 |
 | 3. Background Worker | 1/1 | Complete | 2026-01-23 |
 | 4. HTTP API | 3/3 | Complete | 2026-01-23 |
-| 5. CLI Integration | 0/? | Not started | - |
+| 5. CLI Integration | 0/1 | Not started | - |
