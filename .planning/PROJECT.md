@@ -8,26 +8,15 @@ An offline audio transcription tool with CLI and HTTP API interfaces. Install vi
 
 Transcribe audio to text anywhere, offline, with a single command or API call — no cloud services, no API keys, no ongoing costs.
 
-## Current Milestone: v2.0 API
-
-**Goal:** Add HTTP API layer with async job queue for programmatic transcription access.
-
-**Target features:**
-- Service layer for transcription orchestration
-- FastAPI-based HTTP API with OpenAPI/Swagger docs
-- Async job queue with SQLite persistence
-- File upload and URL reference support
-- Polling and optional webhook callbacks
-- `cesar serve` command to start server
-
 ## Current State
 
-**Shipped:** v1.0 Package & CLI (2026-01-23)
-- Pipx-installable package with `cesar` command
-- `cesar transcribe` subcommand for audio transcription
-- 982 LOC Python, 35 tests passing
+**Shipped:** v2.0 API (2026-01-23)
+- HTTP API with async job queue via `cesar serve`
+- 6 REST endpoints: health, jobs list/get, transcribe (file upload + URL)
+- SQLite persistence with job recovery on crash
+- ~1,929 LOC Python, 124 tests passing
 
-**Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI (v2.0)
+**Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn
 
 ## Requirements
 
@@ -46,19 +35,21 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 - ✓ `cesar --version` shows correct version — v1.0
 - ✓ `cesar --help` shows available commands — v1.0
 - ✓ `cesar transcribe --help` shows options — v1.0
+- ✓ SQLite-based job queue with persistence — v2.0
+- ✓ POST /transcribe endpoint (file upload) — v2.0
+- ✓ POST /transcribe/url endpoint (URL reference) — v2.0
+- ✓ GET /jobs/{id} for status and results — v2.0
+- ✓ GET /jobs for job listing with status filter — v2.0
+- ✓ GET /health for server status — v2.0
+- ✓ Sequential job processing (queue and process) — v2.0
+- ✓ OpenAPI/Swagger docs at /docs — v2.0
+- ✓ `cesar serve` command with --port option — v2.0
+- ✓ `cesar serve --help` shows server options — v2.0
+- ✓ Job recovery on crash (re-queue orphaned jobs) — v2.0
 
 ### Active
 
-- [ ] TranscriptionService class for job orchestration
-- [ ] SQLite-based job queue with persistence
-- [ ] POST /transcribe endpoint (file upload)
-- [ ] POST /transcribe endpoint (URL reference)
-- [ ] GET /jobs/{id} for status and results
-- [ ] Optional webhook callback on completion
-- [ ] Multiple concurrent jobs (queue and process)
-- [ ] OpenAPI/Swagger docs at /docs
-- [ ] `cesar serve` command with --port option
-- [ ] `cesar serve --help` shows server options
+(No active requirements — ready for next milestone planning)
 
 ### Out of Scope
 
@@ -70,6 +61,9 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 - `cesar config` command — add later if needed
 - CI/CD install validation — manual testing sufficient
 - Windows support — focus on Mac/Linux first
+- Webhook callbacks — deferred to v2.1
+- Model selection parameter for API — deferred to v2.1
+- Language specification parameter — deferred to v2.1
 
 ## Constraints
 
@@ -89,10 +83,16 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 | Single-source versioning via importlib.metadata | No duplicate version definitions | ✓ Good |
 | click.Group for CLI | Supports subcommands, extensible | ✓ Good |
 | Prompt before model download | Models are 150MB+, user should consent | — Pending |
-| FastAPI for HTTP API | Modern, async, automatic OpenAPI docs | — Pending |
-| SQLite for job persistence | No external dependencies, fits offline-first | — Pending |
-| Async job queue | Transcription is slow, don't block requests | — Pending |
-| Defer CLI refactor | Ship API first, unify architecture later | — Pending |
+| FastAPI for HTTP API | Modern, async, automatic OpenAPI docs | ✓ Good |
+| SQLite for job persistence | No external dependencies, fits offline-first | ✓ Good |
+| Async job queue | Transcription is slow, don't block requests | ✓ Good |
+| Defer CLI refactor | Ship API first, unify architecture later | ✓ Good |
+| Pydantic v2 models | Validation, serialization, ConfigDict pattern | ✓ Good |
+| WAL mode with busy_timeout | Concurrent access, lock contention handling | ✓ Good |
+| Lifespan context manager | Modern FastAPI pattern (on_event deprecated) | ✓ Good |
+| Separate file/URL endpoints | Different content types need different handling | ✓ Good |
+| Job recovery on startup | Re-queue orphaned jobs from crashes | ✓ Good |
+| Import string for uvicorn | Required for reload support | ✓ Good |
 
 ---
-*Last updated: 2026-01-23 after starting v2.0 milestone*
+*Last updated: 2026-01-23 after v2.0 milestone*
