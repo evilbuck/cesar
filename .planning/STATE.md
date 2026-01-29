@@ -5,17 +5,17 @@
 See: .planning/PROJECT.md (updated 2026-01-24)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Milestone v2.1 — CLI Refactor
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v2.1 CLI Refactor
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-01-24 — Milestone v2.1 started
+Milestone: v2.0 API complete
+Phase: Ready for next milestone
+Plan: Not started
+Status: v2.0 shipped, ready for /gsd:new-milestone
+Last activity: 2026-01-24 — v2.1 cancelled (architecture already unified)
 
-Progress: [░░░░░░░░░░] 0% (v2.1: requirements phase)
+Progress: [██████████] 100% (v2.0: shipped)
 
 ## Performance Metrics
 
@@ -32,6 +32,13 @@ Progress: [░░░░░░░░░░] 0% (v2.1: requirements phase)
 
 See PROJECT.md Key Decisions table for full history.
 
+### Findings
+
+**2026-01-24:** Investigated CLI refactor for v2.1. Found architecture is already unified:
+- CLI (`cli.py:247`) and API (`worker.py:183`) both call `AudioTranscriber.transcribe_file()`
+- No code duplication in core transcription logic
+- Only difference is option exposure (CLI has more options than API)
+
 ### Pending Todos
 
 None.
@@ -43,7 +50,7 @@ None.
 ## Session Continuity
 
 Last session: 2026-01-24
-Stopped at: Milestone v2.1 started
+Stopped at: v2.1 cancelled, back to v2.0 complete state
 Resume file: None
 
 ## Milestone History
@@ -54,4 +61,4 @@ Resume file: None
 See `.planning/MILESTONES.md` for full details.
 
 ---
-*Next: Define requirements, then create roadmap*
+*Next: `/gsd:new-milestone` to start planning v2.1 features (webhooks, model param, language param) or different scope*

@@ -49,14 +49,12 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 
 ### Active
 
-- [ ] CLI uses same service layer as HTTP API — v2.1
-- [ ] No user-visible behavior changes to `cesar transcribe` — v2.1
-- [ ] Single code path for transcription logic — v2.1
+(No active requirements — ready for next milestone planning)
 
 ### Out of Scope
 
 - AI summarization — deferred to future milestone
-- Refactor CLI to use service layer — moved to v2.1 Active
+- Refactor CLI to use service layer — already done (AudioTranscriber shared by CLI and API)
 - Authentication/API keys — internal service, not needed
 - Rate limiting — internal service, not needed
 - `cesar models` command — add later if needed
@@ -96,14 +94,5 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 | Job recovery on startup | Re-queue orphaned jobs from crashes | ✓ Good |
 | Import string for uvicorn | Required for reload support | ✓ Good |
 
-## Current Milestone: v2.1 CLI Refactor
-
-**Goal:** Unify CLI and API architecture — CLI calls same service layer as HTTP API, eliminating code duplication.
-
-**Target features:**
-- CLI uses service layer instead of direct transcriber calls
-- Identical user-facing behavior (no breaking changes)
-- Single code path for all transcription operations
-
 ---
-*Last updated: 2026-01-24 after v2.1 milestone started*
+*Last updated: 2026-01-24 after v2.1 cancelled (architecture already unified)*
