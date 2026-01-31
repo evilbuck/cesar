@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-31)
 ## Current Position
 
 Phase: 6 of 8 (Core YouTube Module)
-Plan: 0 of TBD in current phase
-Status: Ready to plan
-Last activity: 2026-01-31 — Roadmap created for v2.1 YouTube Transcription milestone
+Plan: 1 of 1 in current phase
+Status: Planned - ready to execute
+Last activity: 2026-01-31 — Phase 6 plan created
 
-Progress: [█████░░░░░] 50% (5/10 total plans across all phases)
+Progress: [█████░░░░░] 50% (10/11 total plans across all phases)
 
 ## Performance Metrics
 
@@ -32,6 +32,7 @@ Progress: [█████░░░░░] 50% (5/10 total plans across all phas
 | 3. Background Worker | 1 | - | - |
 | 4. REST API | 2 | - | - |
 | 5. Server Command | 2 | - | - |
+| 6. Core YouTube Module | 1 | - | - |
 
 **Recent Trend:**
 - Last 5 plans: Not tracked individually
@@ -49,12 +50,18 @@ Recent decisions affecting current work:
 - v2.0: Separate file/URL endpoints - Different content types need different handling
 - v2.0: FastAPI for HTTP API - Modern, async, automatic OpenAPI docs
 - v2.0: SQLite for job persistence - No external dependencies, fits offline-first
+- v2.1: Use yt-dlp for YouTube downloads - Only viable option, youtube-dl unmaintained
 
 ### Findings
 
 **2026-01-24:** Architecture is already unified:
 - CLI and API both call AudioTranscriber.transcribe_file()
 - No code duplication in core transcription logic
+
+**2026-01-31:** Phase 6 research complete:
+- yt-dlp Python API well-documented with YoutubeDL context manager
+- FFmpeg validation via shutil.which() - standard pattern
+- Temp file cleanup requires explicit handling (yt-dlp limitation)
 
 ### Pending Todos
 
@@ -63,16 +70,15 @@ None yet.
 ### Blockers/Concerns
 
 **Phase 6 considerations:**
-- FFmpeg is required system dependency (already documented, just needs validation)
-- yt-dlp version compatibility with YouTube API changes
-- JavaScript runtime requirement for yt-dlp (Deno) may affect some YouTube URLs
+- FFmpeg is required system dependency (validated on startup per SYS-01)
+- yt-dlp version compatibility with YouTube API changes (use recent version)
 
 ## Session Continuity
 
 Last session: 2026-01-31
-Stopped at: Roadmap creation complete for v2.1 milestone
-Resume file: None
-Next step: Run /gsd:plan-phase 6 to create first plan for Core YouTube Module
+Stopped at: Phase 6 planning complete
+Resume file: .planning/phases/06-core-youtube-module/06-01-PLAN.md
+Next step: Run /gsd:execute-phase 6 to execute the plan
 
 ## Milestone History
 
