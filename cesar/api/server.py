@@ -19,6 +19,7 @@ from cesar.api.file_handler import download_from_url, save_upload_file
 from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
+from cesar.youtube_handler import check_ffmpeg_available
 
 logger = logging.getLogger(__name__)
 
@@ -90,12 +91,13 @@ app = FastAPI(
 async def health():
     """Health check endpoint.
 
-    Returns server health status and worker state.
+    Returns server health status, worker state, and YouTube capability.
 
     Returns:
-        dict: Health status with "status" and "worker" keys
+        dict: Health status with:
             - status: "healthy" when server is operational
             - worker: "running" if worker task is active, "stopped" if done
+            - youtube: object with ffmpeg_available and message
     """
     worker_task = getattr(app.state, "worker_task", None)
 
@@ -106,9 +108,16 @@ async def health():
     else:
         worker_status = "running"
 
+    # Check YouTube capability (FFmpeg availability)
+    ffmpeg_available, ffmpeg_message = check_ffmpeg_available()
+
     return {
         "status": "healthy",
         "worker": worker_status,
+        "youtube": {
+            "available": ffmpeg_available,
+            "message": ffmpeg_message if not ffmpeg_available else "YouTube transcription supported",
+        },
     }
 
 
