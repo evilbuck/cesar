@@ -341,12 +341,12 @@ def transcribe(input_source, output, model, device, compute_type, batch_size, nu
         error_msg = f"Error: {e}"
         console.print(f"[red]{error_msg}[/red]")
         click.echo(error_msg, err=True)
-        return 1
+        sys.exit(1)
     except YouTubeDownloadError as e:
         error_msg = f"YouTube Error: {e}"
         console.print(f"[red]{error_msg}[/red]")
         click.echo(error_msg, err=True)
-        return 1
+        sys.exit(1)
     except FileNotFoundError as e:
         error_msg = f"Error: {e}"
         console.print(f"[red]{error_msg}[/red]")
