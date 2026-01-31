@@ -2,74 +2,63 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-23)
+See: .planning/PROJECT.md (updated 2026-01-24)
 
-**Core value:** Transcribe audio to text anywhere, offline, with a single command
+**Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
 **Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v1.0 Package & CLI — SHIPPED
+Milestone: v2.0 API complete
 Phase: Ready for next milestone
 Plan: Not started
-Status: Milestone complete
-Last activity: 2026-01-23 — v1.0 milestone shipped
+Status: v2.0 shipped, ready for /gsd:new-milestone
+Last activity: 2026-01-24 — v2.1 cancelled (architecture already unified)
 
-Progress: [██████████] 100% (v1.0 complete)
+Progress: [██████████] 100% (v2.0: shipped)
 
 ## Performance Metrics
 
-**Velocity:**
-- Total plans completed: 3
-- Average duration: 3 min
-- Total execution time: 9 min
+**v1.0 (shipped 2026-01-23):**
+- 1 phase, 3 plans, 9 min total
 
-**By Phase:**
-
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 01-package-cli-structure | 3 | 9 min | 3 min |
-
-**Recent Trend:**
-- Last 3 plans: 3 min, 4 min, 2 min
-- Trend: stable
-
-*Updated after each plan completion*
+**v2.0 (shipped 2026-01-23):**
+- 4 phases, 7 plans, 18 min total
+- Average: 1.8 min/plan
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
+See PROJECT.md Key Decisions table for full history.
 
-- Used setuptools build backend (standard, well-supported)
-- Single-source versioning via importlib.metadata with 0.0.0 dev fallback
-- Converted CLI from single command to click.Group for future subcommands
-- Mock DeviceDetector.get_capabilities to avoid torch import in tests
+### Findings
+
+**2026-01-24:** Investigated CLI refactor for v2.1. Found architecture is already unified:
+- CLI (`cli.py:247`) and API (`worker.py:183`) both call `AudioTranscriber.transcribe_file()`
+- No code duplication in core transcription logic
+- Only difference is option exposure (CLI has more options than API)
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-None yet.
+None.
 
 ## Session Continuity
 
-Last session: 2026-01-23
-Stopped at: v1.0 milestone shipped, ready for next milestone
+Last session: 2026-01-24
+Stopped at: v2.1 cancelled, back to v2.0 complete state
 Resume file: None
 
-## v1.0 Summary
+## Milestone History
 
-Shipped with Phase 1 complete:
-- Package structure with cesar/ directory and pyproject.toml
-- pipx installation verified end-to-end
-- Tests migrated, 35 passing
-- README updated
+- **v1.0 Package & CLI** — Shipped 2026-01-23 (1 phase, 3 plans)
+- **v2.0 API** — Shipped 2026-01-23 (4 phases, 7 plans)
 
-Deferred to next milestone:
-- Phase 2: User Experience (model prompts, ffprobe errors)
-- Phase 3: Cross-Platform Validation (macOS/Linux)
+See `.planning/MILESTONES.md` for full details.
+
+---
+*Next: `/gsd:new-milestone` to start planning v2.1 features (webhooks, model param, language param) or different scope*

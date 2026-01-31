@@ -2,20 +2,21 @@
 
 ## What This Is
 
-An offline audio transcription CLI tool using faster-whisper. Install via `pipx install .` and run `cesar transcribe <file> -o <output>`. Works completely offline after initial model download.
+An offline audio transcription tool with CLI and HTTP API interfaces. Install via `pipx install .` for the CLI (`cesar transcribe`) or run `cesar serve` to start the API server with OpenAPI docs. Works completely offline after initial model download.
 
 ## Core Value
 
-Transcribe audio to text anywhere, offline, with a single command — no cloud services, no API keys, no ongoing costs.
+Transcribe audio to text anywhere, offline, with a single command or API call — no cloud services, no API keys, no ongoing costs.
 
 ## Current State
 
-**Shipped:** v1.0 Package & CLI (2026-01-23)
-- Pipx-installable package with `cesar` command
-- `cesar transcribe` subcommand for audio transcription
-- 982 LOC Python, 35 tests passing
+**Shipped:** v2.0 API (2026-01-23)
+- HTTP API with async job queue via `cesar serve`
+- 6 REST endpoints: health, jobs list/get, transcribe (file upload + URL)
+- SQLite persistence with job recovery on crash
+- ~1,929 LOC Python, 124 tests passing
 
-**Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools
+**Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn
 
 ## Requirements
 
@@ -34,23 +35,35 @@ Transcribe audio to text anywhere, offline, with a single command — no cloud s
 - ✓ `cesar --version` shows correct version — v1.0
 - ✓ `cesar --help` shows available commands — v1.0
 - ✓ `cesar transcribe --help` shows options — v1.0
+- ✓ SQLite-based job queue with persistence — v2.0
+- ✓ POST /transcribe endpoint (file upload) — v2.0
+- ✓ POST /transcribe/url endpoint (URL reference) — v2.0
+- ✓ GET /jobs/{id} for status and results — v2.0
+- ✓ GET /jobs for job listing with status filter — v2.0
+- ✓ GET /health for server status — v2.0
+- ✓ Sequential job processing (queue and process) — v2.0
+- ✓ OpenAPI/Swagger docs at /docs — v2.0
+- ✓ `cesar serve` command with --port option — v2.0
+- ✓ `cesar serve --help` shows server options — v2.0
+- ✓ Job recovery on crash (re-queue orphaned jobs) — v2.0
 
 ### Active
 
-- [ ] Prompt before downloading models on first run
-- [ ] Show model size estimate in download prompt
-- [ ] Clear error message if ffprobe/ffmpeg not installed
-- [ ] Platform-specific ffmpeg install suggestion (brew/apt)
-- [ ] Works on macOS (Intel and Apple Silicon)
-- [ ] Works on Linux x86_64
+(No active requirements — ready for next milestone planning)
 
 ### Out of Scope
 
-- AI summarization — deferred to future milestone (configurable providers planned)
+- AI summarization — deferred to future milestone
+- Refactor CLI to use service layer — already done (AudioTranscriber shared by CLI and API)
+- Authentication/API keys — internal service, not needed
+- Rate limiting — internal service, not needed
 - `cesar models` command — add later if needed
 - `cesar config` command — add later if needed
 - CI/CD install validation — manual testing sufficient
 - Windows support — focus on Mac/Linux first
+- Webhook callbacks — deferred to v2.1
+- Model selection parameter for API — deferred to v2.1
+- Language specification parameter — deferred to v2.1
 
 ## Constraints
 
@@ -58,6 +71,7 @@ Transcribe audio to text anywhere, offline, with a single command — no cloud s
 - **Cross-platform**: macOS (Intel + Apple Silicon) and Linux x86_64
 - **pipx compatible**: Standard Python packaging, no exotic build requirements
 - **ffprobe dependency**: Required external tool for audio duration detection
+- **No external services**: SQLite for persistence, no Redis/Postgres required
 
 ## Key Decisions
 
@@ -69,6 +83,16 @@ Transcribe audio to text anywhere, offline, with a single command — no cloud s
 | Single-source versioning via importlib.metadata | No duplicate version definitions | ✓ Good |
 | click.Group for CLI | Supports subcommands, extensible | ✓ Good |
 | Prompt before model download | Models are 150MB+, user should consent | — Pending |
+| FastAPI for HTTP API | Modern, async, automatic OpenAPI docs | ✓ Good |
+| SQLite for job persistence | No external dependencies, fits offline-first | ✓ Good |
+| Async job queue | Transcription is slow, don't block requests | ✓ Good |
+| Defer CLI refactor | Ship API first, unify architecture later | ✓ Good |
+| Pydantic v2 models | Validation, serialization, ConfigDict pattern | ✓ Good |
+| WAL mode with busy_timeout | Concurrent access, lock contention handling | ✓ Good |
+| Lifespan context manager | Modern FastAPI pattern (on_event deprecated) | ✓ Good |
+| Separate file/URL endpoints | Different content types need different handling | ✓ Good |
+| Job recovery on startup | Re-queue orphaned jobs from crashes | ✓ Good |
+| Import string for uvicorn | Required for reload support | ✓ Good |
 
 ---
-*Last updated: 2026-01-23 after v1.0 milestone*
+*Last updated: 2026-01-24 after v2.1 cancelled (architecture already unified)*
