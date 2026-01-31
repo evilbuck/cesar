@@ -75,7 +75,7 @@ Plans:
 **Plans**: 1 plan
 
 Plans:
-- [ ] 06-01-PLAN.md — Core youtube_handler module with FFmpeg validation, URL detection, and yt-dlp download
+- [x] 06-01-PLAN.md — Core youtube_handler module with FFmpeg validation, URL detection, and yt-dlp download
 
 #### Phase 7: Interface Integration
 **Goal**: CLI and API interfaces accept YouTube URLs with progress feedback
@@ -119,6 +119,6 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 3. Background Worker | v2.0 | 1/1 | Complete | 2026-01-23 |
 | 4. REST API | v2.0 | 2/2 | Complete | 2026-01-23 |
 | 5. Server Command | v2.0 | 2/2 | Complete | 2026-01-23 |
-| 6. Core YouTube Module | v2.1 | 0/1 | Planned | - |
+| 6. Core YouTube Module | v2.1 | 1/1 | Complete | 2026-01-31 |
 | 7. Interface Integration | v2.1 | 0/TBD | Not started | - |
 | 8. Error Handling & Docs | v2.1 | 0/TBD | Not started | - |

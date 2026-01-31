@@ -9,10 +9,10 @@ Requirements for YouTube transcription milestone.
 
 ### YouTube Integration (Shared Service)
 
-- [ ] **YT-01**: `youtube_handler.py` module provides `is_youtube_url()` and `download_youtube_audio()`
-- [ ] **YT-02**: yt-dlp extracts best quality audio from YouTube video to temp file
-- [ ] **YT-03**: Temp audio files cleaned up after transcription completes
-- [ ] **YT-04**: Temp audio files cleaned up on download/transcription failure
+- [x] **YT-01**: `youtube_handler.py` module provides `is_youtube_url()` and `download_youtube_audio()`
+- [x] **YT-02**: yt-dlp extracts best quality audio from YouTube video to temp file
+- [x] **YT-03**: Temp audio files cleaned up after transcription completes
+- [x] **YT-04**: Temp audio files cleaned up on download/transcription failure
 
 ### Interface Integration (Uses Shared Service)
 
@@ -21,8 +21,8 @@ Requirements for YouTube transcription milestone.
 
 ### System Validation
 
-- [ ] **SYS-01**: FFmpeg presence validated on startup
-- [ ] **SYS-02**: YouTube jobs rejected with clear error if FFmpeg missing
+- [x] **SYS-01**: FFmpeg presence validated on startup
+- [x] **SYS-02**: YouTube jobs rejected with clear error if FFmpeg missing
 - [ ] **SYS-03**: Health endpoint reports FFmpeg/YouTube support status
 
 ### Progress & Feedback
@@ -67,14 +67,14 @@ Acknowledged but deferred to future milestone.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| YT-01 | Phase 6 | Pending |
-| YT-02 | Phase 6 | Pending |
-| YT-03 | Phase 6 | Pending |
-| YT-04 | Phase 6 | Pending |
+| YT-01 | Phase 6 | Complete |
+| YT-02 | Phase 6 | Complete |
+| YT-03 | Phase 6 | Complete |
+| YT-04 | Phase 6 | Complete |
 | INT-01 | Phase 7 | Pending |
 | INT-02 | Phase 7 | Pending |
-| SYS-01 | Phase 6 | Pending |
-| SYS-02 | Phase 6 | Pending |
+| SYS-01 | Phase 6 | Complete |
+| SYS-02 | Phase 6 | Complete |
 | SYS-03 | Phase 7 | Pending |
 | UX-01 | Phase 7 | Pending |
 | UX-02 | Phase 7 | Pending |
