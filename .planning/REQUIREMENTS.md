@@ -1,0 +1,93 @@
+# Requirements: Cesar v2.1
+
+**Defined:** 2026-01-31
+**Core Value:** Transcribe audio to text anywhere, offline, with a single command or API call
+
+## v2.1 Requirements
+
+Requirements for YouTube transcription milestone.
+
+### YouTube Integration (Shared Service)
+
+- [ ] **YT-01**: `youtube_handler.py` module provides `is_youtube_url()` and `download_youtube_audio()`
+- [ ] **YT-02**: yt-dlp extracts best quality audio from YouTube video to temp file
+- [ ] **YT-03**: Temp audio files cleaned up after transcription completes
+- [ ] **YT-04**: Temp audio files cleaned up on download/transcription failure
+
+### Interface Integration (Uses Shared Service)
+
+- [ ] **INT-01**: CLI detects YouTube URLs and calls `youtube_handler.download_youtube_audio()`
+- [ ] **INT-02**: `file_handler.py` routes YouTube URLs to `youtube_handler` (API path)
+
+### System Validation
+
+- [ ] **SYS-01**: FFmpeg presence validated on startup
+- [ ] **SYS-02**: YouTube jobs rejected with clear error if FFmpeg missing
+- [ ] **SYS-03**: Health endpoint reports FFmpeg/YouTube support status
+
+### Progress & Feedback
+
+- [ ] **UX-01**: CLI shows download progress during YouTube audio extraction
+- [ ] **UX-02**: API job status includes download phase progress
+
+### Error Handling
+
+- [ ] **ERR-01**: Invalid YouTube URLs return clear error message
+- [ ] **ERR-02**: Private/unavailable videos return clear error message
+- [ ] **ERR-03**: Network failures during download return clear error message
+- [ ] **ERR-04**: YouTube rate limiting (403/429) handled with clear error message
+
+## v2.2 Requirements (Deferred)
+
+Acknowledged but deferred to future milestone.
+
+### Output Formats
+
+- **FMT-01**: SRT output format with timestamps
+- **FMT-02**: VTT output format with timestamps
+- **FMT-03**: `--format` flag for output format selection
+
+### Advanced Features
+
+- **ADV-01**: Batch processing (multiple URLs)
+- **ADV-02**: Audio quality selection
+- **ADV-03**: Downloaded audio caching for re-transcription
+
+## Out of Scope
+
+| Feature | Reason |
+|---------|--------|
+| Video download | Audio-only focus, scope creep |
+| Playlist auto-expansion | Unclear user intent, complexity |
+| Other platforms (Vimeo, etc.) | YouTube only for v2.1 |
+| Live stream transcription | Requires streaming architecture |
+| Cookie-based authentication | Avoid account ban risk |
+
+## Traceability
+
+| Requirement | Phase | Status |
+|-------------|-------|--------|
+| YT-01 | Phase 6 | Pending |
+| YT-02 | Phase 6 | Pending |
+| YT-03 | Phase 6 | Pending |
+| YT-04 | Phase 6 | Pending |
+| INT-01 | Phase 7 | Pending |
+| INT-02 | Phase 7 | Pending |
+| SYS-01 | Phase 6 | Pending |
+| SYS-02 | Phase 6 | Pending |
+| SYS-03 | Phase 7 | Pending |
+| UX-01 | Phase 7 | Pending |
+| UX-02 | Phase 7 | Pending |
+| ERR-01 | Phase 8 | Pending |
+| ERR-02 | Phase 8 | Pending |
+| ERR-03 | Phase 8 | Pending |
+| ERR-04 | Phase 8 | Pending |
+
+**Coverage:**
+- v2.1 requirements: 15 total
+- Mapped to phases: 15
+- Unmapped: 0 ✓
+
+---
+*Requirements defined: 2026-01-31*
+*Last updated: 2026-01-31 after initial definition*
