@@ -9,13 +9,13 @@ See: .planning/PROJECT.md (updated 2026-01-24)
 
 ## Current Position
 
-Milestone: v2.0 API complete
-Phase: Ready for next milestone
-Plan: Not started
-Status: v2.0 shipped, ready for /gsd:new-milestone
-Last activity: 2026-01-24 — v2.1 cancelled (architecture already unified)
+Milestone: v2.1 YouTube Transcription
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-01-31 — Milestone v2.1 started
 
-Progress: [██████████] 100% (v2.0: shipped)
+Progress: [░░░░░░░░░░] 0% (v2.1: requirements)
 
 ## Performance Metrics
 
@@ -61,4 +61,4 @@ Resume file: None
 See `.planning/MILESTONES.md` for full details.
 
 ---
-*Next: `/gsd:new-milestone` to start planning v2.1 features (webhooks, model param, language param) or different scope*
+*Next: Define requirements for v2.1 YouTube Transcription*

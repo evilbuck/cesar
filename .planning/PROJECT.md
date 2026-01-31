@@ -18,6 +18,16 @@ Transcribe audio to text anywhere, offline, with a single command or API call â€
 
 **Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn
 
+## Current Milestone: v2.1 YouTube Transcription
+
+**Goal:** Transcribe YouTube videos directly by URL â€” no manual download step required.
+
+**Target features:**
+- `cesar transcribe <youtube-url>` downloads audio and transcribes
+- `POST /transcribe/url` accepts YouTube URLs (alongside regular audio URLs)
+- yt-dlp bundled as Python dependency (no external tool setup)
+- YouTube only for now (other platforms deferred)
+
 ## Requirements
 
 ### Validated
@@ -49,7 +59,11 @@ Transcribe audio to text anywhere, offline, with a single command or API call â€
 
 ### Active
 
-(No active requirements â€” ready for next milestone planning)
+- [ ] CLI accepts YouTube URLs for transcription
+- [ ] API accepts YouTube URLs via POST /transcribe/url
+- [ ] yt-dlp bundled as Python dependency
+- [ ] Audio extracted from YouTube video before transcription
+- [ ] Progress feedback during download
 
 ### Out of Scope
 
@@ -95,4 +109,4 @@ Transcribe audio to text anywhere, offline, with a single command or API call â€
 | Import string for uvicorn | Required for reload support | âœ“ Good |
 
 ---
-*Last updated: 2026-01-24 after v2.1 cancelled (architecture already unified)*
+*Last updated: 2026-01-31 after milestone v2.1 YouTube Transcription started*
