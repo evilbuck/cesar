@@ -11,6 +11,13 @@ from pathlib import Path
 import httpx
 from fastapi import HTTPException, UploadFile
 
+from cesar.youtube_handler import (
+    is_youtube_url,
+    download_youtube_audio,
+    YouTubeDownloadError,
+    FFmpegNotFoundError,
+)
+
 # Constants
 MAX_FILE_SIZE = 100 * 1024 * 1024  # 100 MB
 ALLOWED_EXTENSIONS = {".mp3", ".wav", ".m4a", ".ogg", ".flac", ".aac", ".wma", ".webm"}
@@ -91,18 +98,36 @@ async def save_upload_file(file: UploadFile) -> str:
 async def download_from_url(url: str) -> str:
     """Download a file from a URL to a temporary location.
 
-    Validates the file extension from the URL path.
+    For YouTube URLs, uses yt-dlp to extract audio.
+    For regular URLs, downloads the file directly.
 
     Args:
-        url: The URL to download from
+        url: The URL to download from (YouTube or direct audio file)
 
     Returns:
-        Path to the downloaded temporary file
+        Path to the downloaded/extracted temporary file
 
     Raises:
         HTTPException: 408 if download times out
         HTTPException: 400 if download fails or extension is invalid
+        HTTPException: 503 if FFmpeg not available for YouTube
     """
+    # Check if YouTube URL - route to youtube_handler
+    if is_youtube_url(url):
+        try:
+            audio_path = download_youtube_audio(url)
+            return str(audio_path)
+        except FFmpegNotFoundError as e:
+            raise HTTPException(
+                status_code=503,
+                detail=f"YouTube transcription unavailable: {str(e)}",
+            )
+        except YouTubeDownloadError as e:
+            raise HTTPException(
+                status_code=400,
+                detail=f"YouTube download failed: {str(e)}",
+            )
+
     # Get extension from URL path
     url_path = Path(url.split("?")[0])  # Remove query params
     ext = url_path.suffix.lower() if url_path.suffix else ".mp3"
