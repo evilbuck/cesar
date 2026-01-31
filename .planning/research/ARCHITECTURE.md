@@ -1,773 +1,416 @@
-# Architecture Research: Async Transcription API
+# Architecture Research: YouTube Integration
 
-**Domain:** HTTP API layer for offline audio transcription
-**Researched:** 2026-01-23
-**Confidence:** HIGH (verified with FastAPI official docs, established patterns)
+**Domain:** YouTube URL audio extraction for offline transcription
+**Researched:** 2026-01-31
+**Confidence:** HIGH (verified with yt-dlp official docs, existing cesar architecture)
 
 ## Executive Summary
 
-The cesar v2.0 API must wrap the existing synchronous `AudioTranscriber` class with an async HTTP layer. The key challenge: faster-whisper's `transcribe()` is CPU-bound and blocks for seconds to minutes. The solution uses a **background worker thread** started via FastAPI's lifespan events, processing jobs from a **SQLite-backed queue**.
+The YouTube integration extends cesar's existing unified architecture by adding audio extraction from YouTube URLs before transcription. The key insight: **yt-dlp fits cleanly into the existing download flow** already established by POST /transcribe/url. No new components required—only extend the existing file_handler.py module.
 
-This architecture avoids external dependencies (no Redis, no Celery) while providing:
-- Non-blocking API endpoints (instant job submission)
-- Persistent job queue (survives process restarts)
-- Progress tracking and result retrieval
-- File upload with automatic cleanup
+Existing architecture already supports:
+- CLI calls AudioTranscriber.transcribe_file() directly
+- API has POST /transcribe/url that downloads from URL, then worker calls AudioTranscriber.transcribe_file()
+- file_handler.py handles URL downloads with download_from_url()
 
-## Component Design
+YouTube integration requires:
+- Detect YouTube URLs in file_handler.py
+- Route YouTube URLs to yt-dlp instead of httpx
+- Extract audio to temp file (same interface as download_from_url())
+- Rest of flow unchanged (worker processes, AudioTranscriber transcribes)
 
-### Component Diagram
+## Integration Points
 
-```
-                                    FastAPI Application
-    +------------------------------------------------------------------------+
-    |                                                                        |
-    |   +-----------------+      +--------------------+                      |
-    |   |  HTTP Endpoints |      |   TranscriptionSvc |                      |
-    |   |  (api.py)       |----->|   (service.py)     |                      |
-    |   +-----------------+      +--------------------+                      |
-    |          |                         |                                   |
-    |          |                         v                                   |
-    |          |               +--------------------+                        |
-    |          |               |    JobRepository   |                        |
-    |          |               |   (repository.py)  |                        |
-    |          |               +--------------------+                        |
-    |          |                         |                                   |
-    |          v                         v                                   |
-    |   +-----------------+      +--------------------+                      |
-    |   |  UploadManager  |      |     SQLite DB      |                      |
-    |   |  (uploads.py)   |      |   (jobs.db)        |                      |
-    |   +-----------------+      +--------------------+                      |
-    |          |                         ^                                   |
-    |          v                         |                                   |
-    |   +-----------------+      +--------------------+      +-------------+ |
-    |   |  Temp Files     |      |  BackgroundWorker  |----->| AudioTrans- | |
-    |   |  (uploads/)     |      |  (worker.py)       |      | criber      | |
-    |   +-----------------+      +--------------------+      +-------------+ |
-    |                                                                        |
-    +------------------------------------------------------------------------+
+### 1. file_handler.py (MODIFY)
+
+**Current responsibility:** Download audio files from generic URLs using httpx
+
+**New responsibility:** Route YouTube URLs to yt-dlp for audio extraction, generic URLs to httpx
+
+**Integration point:**
+```python
+async def download_from_url(url: str) -> str:
+    # NEW: Detect YouTube URL
+    if is_youtube_url(url):
+        return await download_youtube_audio(url)
+
+    # EXISTING: Generic URL download
+    # ... existing httpx code ...
 ```
 
-### Component Responsibilities
+### 2. cli.py (MODIFY)
 
-| Component | File | Responsibility |
-|-----------|------|----------------|
-| HTTP Endpoints | `cesar/api/routes.py` | Request handling, validation, response formatting |
-| TranscriptionService | `cesar/api/service.py` | Job orchestration, business logic |
-| JobRepository | `cesar/api/repository.py` | SQLite CRUD operations for jobs |
-| BackgroundWorker | `cesar/api/worker.py` | Async task processor, runs AudioTranscriber |
-| UploadManager | `cesar/api/uploads.py` | File storage, cleanup, validation |
-| Database Models | `cesar/api/models.py` | Pydantic models and enums |
+**Current responsibility:** Accept file paths for transcription
 
-### Package Structure
+**New responsibility:** Also accept YouTube URLs, download audio before transcribing
 
+**Integration point:**
+```python
+@cli.command(name="transcribe")
+@click.argument('input_file', ...)
+def transcribe(input_file, ...):
+    # NEW: Detect if input_file is YouTube URL
+    if is_youtube_url(input_file):
+        temp_audio_path = download_youtube_audio_sync(input_file)
+        input_file = temp_audio_path
+
+    # EXISTING: transcriber.transcribe_file(input_file, ...)
 ```
-cesar/
-├── __init__.py
-├── __main__.py
-├── cli.py                    # Existing CLI (unchanged)
-├── transcriber.py            # Existing AudioTranscriber (unchanged)
-├── device_detection.py       # Existing (unchanged)
-├── utils.py                  # Existing (unchanged)
-└── api/                      # NEW: API module
-    ├── __init__.py
-    ├── app.py                # FastAPI app factory with lifespan
-    ├── routes.py             # HTTP endpoint definitions
-    ├── service.py            # TranscriptionService class
-    ├── repository.py         # JobRepository (SQLite operations)
-    ├── worker.py             # BackgroundWorker class
-    ├── uploads.py            # UploadManager class
-    ├── models.py             # Pydantic models, enums
-    └── config.py             # API configuration
+
+### 3. AudioTranscriber (UNCHANGED)
+
+**Current responsibility:** Transcribe local audio files
+
+**No changes required:** YouTube audio is downloaded to temp file first, then transcribed as normal local file
+
+### 4. BackgroundWorker (UNCHANGED)
+
+**Current responsibility:** Call AudioTranscriber.transcribe_file() with job.audio_path
+
+**No changes required:** file_handler.py already downloads to temp file, worker processes it the same way
+
+### 5. POST /transcribe/url (UNCHANGED)
+
+**Current responsibility:** Download from URL, create job
+
+**No changes required:** file_handler.download_from_url() handles YouTube detection internally
+
+## New Components
+
+### youtube_handler.py (NEW MODULE)
+
+**Purpose:** yt-dlp integration for YouTube audio extraction
+
+**Location:** cesar/api/youtube_handler.py (or cesar/youtube_handler.py if shared by CLI and API)
+
+**Responsibilities:**
+- Detect YouTube URLs (youtube.com, youtu.be, m.youtube.com)
+- Configure yt-dlp for audio-only download
+- Extract audio to temporary file
+- Handle yt-dlp errors and timeouts
+- Provide sync and async interfaces
+
+**Key functions:**
+
+```python
+def is_youtube_url(url: str) -> bool:
+    """Check if URL is a YouTube video URL."""
+    # Pattern match youtube.com/watch?v=, youtu.be/, etc.
+
+async def download_youtube_audio(url: str, output_dir: Optional[str] = None) -> str:
+    """Download YouTube audio to temp file. Returns path.
+
+    Uses yt-dlp in asyncio.to_thread() to avoid blocking.
+    """
+
+def download_youtube_audio_sync(url: str, output_dir: Optional[str] = None) -> str:
+    """Synchronous version for CLI use."""
+    # Direct yt-dlp call, blocks until complete
+
+def _run_yt_dlp(url: str, output_path: str) -> None:
+    """Internal: Configure and run yt-dlp."""
+    # YoutubeDL configuration
+    # FFmpeg post-processing for audio extraction
+```
+
+**yt-dlp configuration:**
+```python
+ydl_opts = {
+    'format': 'bestaudio/best',
+    'outtmpl': output_path,
+    'postprocessors': [{
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'mp3',
+        'preferredquality': '0',  # Best quality
+    }],
+    'quiet': True,  # Suppress console output
+    'no_warnings': True,
+    'extract_flat': False,
+}
 ```
 
 ## Data Flow
 
-### Job Submission Flow
+### YouTube URL → Transcript (CLI)
 
 ```
-1. Client POST /transcribe (file upload)
-         │
-         v
-2. UploadManager.save_upload()
-   - Validate file type/size
-   - Write to temp storage
-   - Return upload path
-         │
-         v
-3. TranscriptionService.create_job()
-   - Generate UUID
-   - Create job record (status=PENDING)
-   - Return job_id immediately
-         │
-         v
-4. Client receives 202 Accepted
-   - Response: { "job_id": "uuid", "status": "pending" }
+1. User runs: cesar transcribe https://youtube.com/watch?v=abc
+
+2. cli.py detects YouTube URL
+   ├─> is_youtube_url(input_file) → True
+   └─> download_youtube_audio_sync(url)
+       ├─> Create temp file with .mp3 extension
+       ├─> Configure yt-dlp options
+       ├─> YoutubeDL().download([url])
+       ├─> FFmpeg extracts audio to temp.mp3
+       └─> Return temp file path
+
+3. cli.py calls AudioTranscriber.transcribe_file(temp.mp3, output.txt)
+   └─> Existing flow unchanged
+
+4. Cleanup temp file after transcription
 ```
 
-### Job Processing Flow
+### YouTube URL → Transcript (API)
 
 ```
-1. BackgroundWorker (running in lifespan)
-   - Polls JobRepository every N seconds
-   - Claims next PENDING job
-         │
-         v
-2. JobRepository.claim_job(job_id)
-   - UPDATE status=PROCESSING, started_at=now()
-   - Return job details
-         │
-         v
-3. loop.run_in_executor(None, transcriber.transcribe_file, ...)
-   - Runs synchronous AudioTranscriber in thread
-   - Does NOT block event loop
-         │
-         v
-4. On completion:
-   - JobRepository.complete_job(job_id, result)
-   - UploadManager.cleanup(job_id)  [optional, configurable]
-   - Webhook callback if configured
+1. Client: POST /transcribe/url {"url": "https://youtube.com/watch?v=abc"}
+
+2. server.py calls file_handler.download_from_url(url)
+   ├─> is_youtube_url(url) → True
+   └─> download_youtube_audio(url)
+       ├─> Run in asyncio.to_thread() (non-blocking)
+       ├─> Same yt-dlp logic as CLI
+       └─> Return temp file path
+
+3. server.py creates Job(audio_path=temp.mp3, ...)
+   └─> Returns 202 Accepted
+
+4. BackgroundWorker picks up job
+   └─> Calls AudioTranscriber.transcribe_file(temp.mp3, ...)
+   └─> Existing flow unchanged
+
+5. Cleanup temp file after job completes (existing file_handler logic)
 ```
 
-### Status Polling Flow
+### Component Communication Diagram
 
 ```
-1. Client GET /jobs/{job_id}
-         │
-         v
-2. JobRepository.get_job(job_id)
-         │
-         v
-3. Return job state:
-   - PENDING: { status, created_at, position_in_queue }
-   - PROCESSING: { status, started_at, progress? }
-   - COMPLETED: { status, result, completed_at }
-   - FAILED: { status, error, failed_at }
+┌─────────────┐
+│ User/Client │
+└──────┬──────┘
+       │
+       │ YouTube URL
+       v
+┌──────────────────┐      ┌────────────────────┐
+│ cli.py           │      │ server.py          │
+│ (CLI interface)  │      │ (API interface)    │
+└────────┬─────────┘      └─────────┬──────────┘
+         │                          │
+         │ Both detect YouTube URL  │
+         │                          │
+         v                          v
+┌────────────────────────────────────────────────┐
+│ youtube_handler.py                             │
+│ ┌────────────────────────────────────────────┐ │
+│ │ is_youtube_url()                           │ │
+│ │ download_youtube_audio_sync() [for CLI]   │ │
+│ │ download_youtube_audio() [for API async]  │ │
+│ └────────────────┬───────────────────────────┘ │
+│                  │                              │
+│                  v                              │
+│         ┌────────────────┐                      │
+│         │ yt-dlp library │                      │
+│         └────────┬───────┘                      │
+│                  │                              │
+│                  v                              │
+│         ┌────────────────┐                      │
+│         │ FFmpeg process │                      │
+│         └────────┬───────┘                      │
+└──────────────────┼────────────────────────────┘
+                   │
+                   │ Temp audio file (.mp3)
+                   v
+         ┌──────────────────┐
+         │ AudioTranscriber │
+         │ (existing, no    │
+         │  changes)        │
+         └──────────────────┘
 ```
 
-## SQLite Schema
-
-### Jobs Table
-
-```sql
-CREATE TABLE jobs (
-    id TEXT PRIMARY KEY,           -- UUID
-    status TEXT NOT NULL,          -- PENDING, PROCESSING, COMPLETED, FAILED
-
-    -- Input configuration
-    input_path TEXT NOT NULL,      -- Path to uploaded/downloaded file
-    input_source TEXT NOT NULL,    -- 'upload' or 'url'
-    model_size TEXT DEFAULT 'base',
-    device TEXT DEFAULT 'auto',
-    compute_type TEXT DEFAULT 'auto',
-
-    -- Optional parameters
-    webhook_url TEXT,
-    start_time_seconds REAL,
-    end_time_seconds REAL,
-    max_duration_minutes INTEGER,
-
-    -- Timestamps
-    created_at TEXT NOT NULL,      -- ISO 8601
-    started_at TEXT,
-    completed_at TEXT,
-
-    -- Results
-    result_json TEXT,              -- JSON blob with transcription result
-    error_message TEXT,
-
-    -- Indexes for common queries
-    CHECK (status IN ('PENDING', 'PROCESSING', 'COMPLETED', 'FAILED'))
-);
-
-CREATE INDEX idx_jobs_status ON jobs(status);
-CREATE INDEX idx_jobs_created_at ON jobs(created_at);
-```
-
-### Why SQLite (Not In-Memory)
-
-| Consideration | In-Memory Dict | SQLite |
-|---------------|----------------|--------|
-| Persistence | Lost on restart | Survives restart |
-| Concurrent access | Needs locks | Built-in |
-| Query flexibility | Manual filtering | SQL queries |
-| Memory footprint | Grows unbounded | Bounded by disk |
-| Complexity | Simple | Slightly more setup |
-
-**Recommendation:** SQLite is worth the small complexity increase for persistence across restarts.
-
-### aiosqlite Integration
-
-```python
-# repository.py
-import aiosqlite
-from pathlib import Path
-
-class JobRepository:
-    def __init__(self, db_path: Path):
-        self.db_path = db_path
-
-    async def init_db(self):
-        """Initialize database schema"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(SCHEMA_SQL)
-            await db.commit()
-
-    async def create_job(self, job: Job) -> str:
-        """Insert new job, return job_id"""
-        async with aiosqlite.connect(self.db_path) as db:
-            await db.execute(
-                "INSERT INTO jobs (...) VALUES (...)",
-                job.to_row()
-            )
-            await db.commit()
-        return job.id
-
-    async def claim_next_pending(self) -> Optional[Job]:
-        """Atomically claim next pending job for processing"""
-        async with aiosqlite.connect(self.db_path) as db:
-            # Use RETURNING for atomic claim
-            cursor = await db.execute("""
-                UPDATE jobs
-                SET status = 'PROCESSING', started_at = ?
-                WHERE id = (
-                    SELECT id FROM jobs
-                    WHERE status = 'PENDING'
-                    ORDER BY created_at
-                    LIMIT 1
-                )
-                RETURNING *
-            """, (datetime.utcnow().isoformat(),))
-            row = await cursor.fetchone()
-            await db.commit()
-            return Job.from_row(row) if row else None
-```
-
-**Note:** SQLite's `RETURNING` clause (added in 3.35) enables atomic claim-and-return operations.
-
-## File Handling
-
-### Upload Storage Strategy
-
-```
-~/.cesar/                        # Or configurable via env
-├── uploads/                     # Uploaded audio files
-│   ├── {job_id}/
-│   │   └── input.{ext}
-│   └── ...
-├── results/                     # Optional: persist transcription results
-│   └── {job_id}.txt
-└── jobs.db                      # SQLite database
-```
-
-### File Lifecycle
-
-```
-1. UPLOAD
-   - Client uploads file via multipart form
-   - UploadManager validates (size, MIME type, magic bytes)
-   - File saved to uploads/{job_id}/input.{ext}
-   - Path stored in job record
-
-2. PROCESSING
-   - BackgroundWorker reads from stored path
-   - AudioTranscriber processes (no changes to existing code)
-   - Result written to job record (result_json)
-
-3. CLEANUP (Configurable)
-   Option A: Immediate cleanup after completion
-   - Delete uploads/{job_id}/ when job completes
-
-   Option B: Retention period
-   - Cleanup task deletes files older than N hours
-
-   Option C: Manual cleanup
-   - DELETE /jobs/{job_id} removes files
-```
-
-### UploadManager Implementation
-
-```python
-# uploads.py
-class UploadManager:
-    ALLOWED_EXTENSIONS = {'.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac'}
-    MAX_FILE_SIZE = 500 * 1024 * 1024  # 500MB default
-
-    def __init__(self, base_path: Path):
-        self.base_path = base_path
-        self.base_path.mkdir(parents=True, exist_ok=True)
-
-    async def save_upload(
-        self,
-        job_id: str,
-        file: UploadFile
-    ) -> Path:
-        """Save uploaded file, return path"""
-        # Validate extension
-        ext = Path(file.filename).suffix.lower()
-        if ext not in self.ALLOWED_EXTENSIONS:
-            raise ValueError(f"Unsupported format: {ext}")
-
-        # Create job directory
-        job_dir = self.base_path / job_id
-        job_dir.mkdir(exist_ok=True)
-
-        # Save file with streaming (memory efficient)
-        file_path = job_dir / f"input{ext}"
-        async with aiofiles.open(file_path, 'wb') as out:
-            while chunk := await file.read(8192):
-                await out.write(chunk)
-
-        return file_path
-
-    async def cleanup_job(self, job_id: str) -> None:
-        """Remove all files for a job"""
-        job_dir = self.base_path / job_id
-        if job_dir.exists():
-            shutil.rmtree(job_dir)
-```
-
-## Integration with Existing Code
-
-### Principle: Minimal Changes to Existing Code
-
-The existing `AudioTranscriber` class works well. The API layer wraps it without modification.
-
-### Running Synchronous Code in Async Context
-
-**Pattern:** Use `loop.run_in_executor()` to run `AudioTranscriber.transcribe_file()` without blocking.
-
-```python
-# worker.py
-import asyncio
-from concurrent.futures import ThreadPoolExecutor
-from cesar.transcriber import AudioTranscriber
-
-class BackgroundWorker:
-    def __init__(self, repository: JobRepository, upload_manager: UploadManager):
-        self.repository = repository
-        self.upload_manager = upload_manager
-        self.executor = ThreadPoolExecutor(max_workers=1)  # Single transcription at a time
-        self._running = False
-
-    async def process_job(self, job: Job) -> dict:
-        """Run transcription in thread pool"""
-        loop = asyncio.get_running_loop()
-
-        # Create transcriber with job's configuration
-        transcriber = AudioTranscriber(
-            model_size=job.model_size,
-            device=job.device if job.device != 'auto' else None,
-            compute_type=job.compute_type if job.compute_type != 'auto' else None,
-        )
-
-        # Run blocking transcription in executor
-        result = await loop.run_in_executor(
-            self.executor,
-            transcriber.transcribe_file,
-            str(job.input_path),
-            str(self._get_output_path(job)),
-            None,  # progress_callback (not used in API)
-            job.max_duration_minutes,
-            job.start_time_seconds,
-            job.end_time_seconds,
-        )
-
-        return result
-```
-
-**Why ThreadPoolExecutor with 1 worker:**
-- faster-whisper is CPU/GPU intensive
-- Running multiple transcriptions simultaneously causes memory pressure
-- Sequential processing is more predictable
-- Can increase workers if hardware allows
-
-### FastAPI Lifespan Integration
-
-```python
-# app.py
-from contextlib import asynccontextmanager
-from fastapi import FastAPI
-
-@asynccontextmanager
-async def lifespan(app: FastAPI):
-    # Startup: Initialize services
-    config = APIConfig.from_env()
-
-    repository = JobRepository(config.db_path)
-    await repository.init_db()
-
-    upload_manager = UploadManager(config.upload_path)
-
-    worker = BackgroundWorker(repository, upload_manager)
-    worker_task = asyncio.create_task(worker.run())
-
-    # Store in app state for route access
-    app.state.repository = repository
-    app.state.upload_manager = upload_manager
-    app.state.service = TranscriptionService(repository, upload_manager)
-
-    yield  # Application runs here
-
-    # Shutdown: Clean up
-    worker.stop()
-    await worker_task
-    worker.executor.shutdown(wait=True)
-
-app = FastAPI(lifespan=lifespan)
-```
-
-### Worker Loop Pattern
-
-```python
-# worker.py (continued)
-class BackgroundWorker:
-    async def run(self):
-        """Main worker loop - polls for pending jobs"""
-        self._running = True
-
-        while self._running:
-            try:
-                # Claim next pending job
-                job = await self.repository.claim_next_pending()
-
-                if job:
-                    try:
-                        result = await self.process_job(job)
-                        await self.repository.complete_job(job.id, result)
-
-                        # Webhook callback if configured
-                        if job.webhook_url:
-                            await self._send_webhook(job, result)
-
-                    except Exception as e:
-                        await self.repository.fail_job(job.id, str(e))
-
-                    finally:
-                        # Cleanup uploaded file (configurable)
-                        if self.auto_cleanup:
-                            await self.upload_manager.cleanup_job(job.id)
-                else:
-                    # No pending jobs, sleep before polling again
-                    await asyncio.sleep(1.0)
-
-            except asyncio.CancelledError:
-                break
-            except Exception as e:
-                # Log error but keep worker running
-                logger.error(f"Worker error: {e}")
-                await asyncio.sleep(5.0)
-
-    def stop(self):
-        """Signal worker to stop"""
-        self._running = False
-```
-
-## API Endpoint Design
-
-### POST /transcribe (File Upload)
-
-```python
-@router.post("/transcribe", status_code=202)
-async def create_transcription_job(
-    file: UploadFile = File(...),
-    model: str = Form("base"),
-    device: str = Form("auto"),
-    compute_type: str = Form("auto"),
-    webhook_url: Optional[str] = Form(None),
-    start_time: Optional[float] = Form(None),
-    end_time: Optional[float] = Form(None),
-    max_duration: Optional[int] = Form(None),
-    service: TranscriptionService = Depends(get_service),
-):
-    """Submit audio file for transcription"""
-    job = await service.create_job_from_upload(
-        file=file,
-        model=model,
-        device=device,
-        compute_type=compute_type,
-        webhook_url=webhook_url,
-        start_time=start_time,
-        end_time=end_time,
-        max_duration=max_duration,
-    )
-    return JobResponse(job_id=job.id, status=job.status)
-```
-
-### GET /jobs/{job_id}
-
-```python
-@router.get("/jobs/{job_id}")
-async def get_job_status(
-    job_id: str,
-    repository: JobRepository = Depends(get_repository),
-):
-    """Get job status and results"""
-    job = await repository.get_job(job_id)
-    if not job:
-        raise HTTPException(404, "Job not found")
-
-    response = JobStatusResponse(
-        job_id=job.id,
-        status=job.status,
-        created_at=job.created_at,
-        started_at=job.started_at,
-        completed_at=job.completed_at,
-    )
-
-    if job.status == JobStatus.COMPLETED:
-        response.result = job.result
-    elif job.status == JobStatus.FAILED:
-        response.error = job.error_message
-
-    return response
-```
-
-### CLI Integration: `cesar serve`
-
-```python
-# cli.py (add to existing)
-@cli.command(name="serve")
-@click.option("--host", default="127.0.0.1", help="Bind address")
-@click.option("--port", default=8000, type=int, help="Port number")
-@click.option("--reload", is_flag=True, help="Enable auto-reload (dev only)")
-def serve(host: str, port: int, reload: bool):
-    """Start the transcription API server"""
-    import uvicorn
-    from cesar.api.app import create_app
-
-    app = create_app()
-    uvicorn.run(
-        app,
-        host=host,
-        port=port,
-        reload=reload,
-    )
-```
-
-## Build Order
-
-### Suggested Implementation Sequence
-
-```
-Phase 1: Foundation (no HTTP yet)
-├── 1.1 Models and enums (cesar/api/models.py)
-├── 1.2 SQLite repository (cesar/api/repository.py)
-└── 1.3 Unit tests for repository
-
-Phase 2: File Handling
-├── 2.1 UploadManager (cesar/api/uploads.py)
-└── 2.2 Unit tests for uploads
-
-Phase 3: Background Worker
-├── 3.1 BackgroundWorker (cesar/api/worker.py)
-├── 3.2 Integration test: worker + repository
-└── 3.3 Verify AudioTranscriber integration
-
-Phase 4: HTTP Layer
-├── 4.1 FastAPI app factory (cesar/api/app.py)
-├── 4.2 TranscriptionService (cesar/api/service.py)
-├── 4.3 HTTP routes (cesar/api/routes.py)
-└── 4.4 Integration tests with TestClient
-
-Phase 5: CLI Integration
-├── 5.1 Add `cesar serve` command
-├── 5.2 Configuration from environment
-└── 5.3 End-to-end testing
-
-Phase 6: Polish
-├── 6.1 OpenAPI documentation customization
-├── 6.2 Error handling refinement
-└── 6.3 Webhook implementation
-```
-
-### Dependency Graph
-
-```
-models.py (no deps)
-    │
-    v
-repository.py (depends on: models)
-    │
-    v
-uploads.py (no internal deps)
-    │
-    v
-worker.py (depends on: repository, uploads, cesar.transcriber)
-    │
-    v
-service.py (depends on: repository, uploads, models)
-    │
-    v
-routes.py (depends on: service, models)
-    │
-    v
-app.py (depends on: routes, worker, lifespan setup)
-    │
-    v
-cli.py serve command (depends on: app)
-```
-
-## Configuration
-
-### Environment Variables
-
-```python
-# config.py
-from pydantic_settings import BaseSettings
-from pathlib import Path
-
-class APIConfig(BaseSettings):
-    # Database
-    db_path: Path = Path.home() / ".cesar" / "jobs.db"
-
-    # File storage
-    upload_path: Path = Path.home() / ".cesar" / "uploads"
-    max_upload_size_mb: int = 500
-    auto_cleanup: bool = True
-    retention_hours: int = 24
-
-    # Worker
-    worker_poll_interval: float = 1.0
-    max_concurrent_jobs: int = 1
-
-    # Server
-    host: str = "127.0.0.1"
-    port: int = 8000
-
-    class Config:
-        env_prefix = "CESAR_"
-```
-
-### Usage
-
-```bash
-# Default (localhost only)
-cesar serve
-
-# Custom port
-cesar serve --port 9000
-
-# All interfaces
-cesar serve --host 0.0.0.0
-
-# Via environment
-CESAR_PORT=9000 CESAR_MAX_UPLOAD_SIZE_MB=1000 cesar serve
-```
-
-## Patterns to Follow
-
-### Pattern 1: Atomic Job Claiming
-
-**Why:** Prevents multiple workers from processing the same job.
-
-```sql
--- Atomic: SELECT + UPDATE in one statement
-UPDATE jobs
-SET status = 'PROCESSING', started_at = ?
-WHERE id = (
-    SELECT id FROM jobs
-    WHERE status = 'PENDING'
-    ORDER BY created_at
-    LIMIT 1
-)
-RETURNING *
-```
-
-### Pattern 2: Graceful Shutdown
-
-**Why:** Don't interrupt in-progress transcriptions.
-
-```python
-async def shutdown(self):
-    self._running = False
-    # Wait for current job to finish (if any)
-    # Don't forcefully kill transcription
-```
-
-### Pattern 3: Streaming File Upload
-
-**Why:** Don't load entire file into memory.
-
-```python
-async with aiofiles.open(path, 'wb') as out:
-    while chunk := await file.read(8192):
-        await out.write(chunk)
-```
-
-## Anti-Patterns to Avoid
-
-### Anti-Pattern 1: Blocking the Event Loop
-
-**Wrong:**
-```python
-@router.post("/transcribe")
-async def transcribe(file: UploadFile):
-    result = transcriber.transcribe_file(...)  # BLOCKS!
-    return result
-```
-
-**Right:**
-```python
-@router.post("/transcribe")
-async def transcribe(file: UploadFile):
-    job = await service.create_job(...)  # Returns immediately
-    return {"job_id": job.id}  # Client polls for result
-```
-
-### Anti-Pattern 2: In-Memory Job State
-
-**Wrong:**
-```python
-jobs = {}  # Lost on restart!
-```
-
-**Right:**
-```python
-# Use SQLite for persistence
-await repository.create_job(job)
-```
-
-### Anti-Pattern 3: Synchronous Database Access in Async Routes
-
-**Wrong:**
-```python
-import sqlite3
-conn = sqlite3.connect(...)  # Blocks!
-```
-
-**Right:**
-```python
-import aiosqlite
-async with aiosqlite.connect(...) as db:
-    ...
-```
-
-## Scalability Considerations
-
-| Load Level | Architecture | Notes |
-|------------|--------------|-------|
-| Single user | Default config | 1 worker, sequential jobs |
-| Light team use | Increase workers | 2-4 workers if GPU has memory |
-| Heavy use | Multiple processes | Run multiple `cesar serve` instances behind nginx |
-| Enterprise | External queue | Graduate to Redis + Celery, reuse service layer |
-
-The architecture is designed to grow:
-- `TranscriptionService` can be reused with different queue backends
-- `JobRepository` interface could swap SQLite for PostgreSQL
-- Worker pattern scales to distributed processing
+## Suggested Build Order
+
+### Phase 1: Core YouTube Download Module
+**Component:** youtube_handler.py
+**Rationale:** Build and test yt-dlp integration in isolation before touching existing code
+
+**Tasks:**
+1. Create youtube_handler.py module
+2. Implement is_youtube_url() with pattern matching
+3. Implement download_youtube_audio_sync() with yt-dlp
+4. Test with real YouTube URLs
+5. Add error handling (network failures, invalid URLs, age-restricted videos)
+6. Write unit tests with mocked yt-dlp
+
+**Validation:** Can download YouTube audio to temp file from Python REPL
+
+---
+
+### Phase 2: CLI Integration
+**Component:** cli.py modifications
+**Rationale:** CLI is simpler (synchronous), validate flow before async API
+
+**Tasks:**
+1. Import youtube_handler in cli.py
+2. Add YouTube URL detection in transcribe() command
+3. Download audio before validation if YouTube URL
+4. Update input_file variable to point to temp file
+5. Add cleanup of temp file after transcription
+6. Update help text to mention YouTube URL support
+7. Test with YouTube URLs in CLI
+
+**Validation:** `cesar transcribe <youtube-url> -o output.txt` works end-to-end
+
+---
+
+### Phase 3: API Integration
+**Component:** file_handler.py modifications
+**Rationale:** Extend existing download logic with YouTube support
+
+**Tasks:**
+1. Import youtube_handler in file_handler.py
+2. Add async wrapper for yt-dlp (asyncio.to_thread)
+3. Modify download_from_url() to route YouTube URLs
+4. Test with POST /transcribe/url and YouTube URLs
+5. Verify worker processes YouTube jobs correctly
+6. Update API documentation
+
+**Validation:** POST /transcribe/url with YouTube URL creates job that completes successfully
+
+---
+
+### Phase 4: Error Handling & Edge Cases
+**Component:** All modified components
+**Rationale:** Handle failure modes after happy path works
+
+**Tasks:**
+1. Handle age-restricted videos (may require cookies/authentication)
+2. Handle private/deleted videos
+3. Handle network timeouts during download
+4. Handle yt-dlp extraction failures
+5. Add progress feedback during download (optional)
+6. Update error messages for clarity
+
+**Validation:** Error cases return clear messages, don't crash
+
+---
+
+### Phase 5: Testing & Documentation
+**Component:** Tests and user docs
+**Rationale:** Ensure reliability and usability
+
+**Tasks:**
+1. Write unit tests for youtube_handler
+2. Write integration tests for CLI YouTube support
+3. Write integration tests for API YouTube support
+4. Update README.md with YouTube examples
+5. Update docs/architecture.md if needed
+6. Add yt-dlp to requirements.txt
+
+**Validation:** All tests pass, documentation accurate
+
+## Technical Decisions
+
+### yt-dlp Configuration Choices
+
+**Format selection:** `'format': 'bestaudio/best'`
+- Downloads best audio-only stream if available
+- Falls back to best overall quality if no audio-only stream
+- Avoids downloading video unnecessarily
+
+**Audio extraction:** FFmpegExtractAudio post-processor
+- Extracts audio from video container if needed
+- Converts to MP3 for consistency
+- Quality '0' = best available
+
+**Output template:** Use tempfile.mkstemp() for controlled temp paths
+- Avoids yt-dlp's default naming (includes video title, can have special chars)
+- Consistent with existing file_handler.py pattern
+- Easy cleanup
+
+### Async vs Sync
+
+**CLI:** Use synchronous download_youtube_audio_sync()
+- CLI already blocks for transcription, blocking for download is acceptable
+- Simpler implementation, no event loop required
+
+**API:** Use async download_youtube_audio() via asyncio.to_thread()
+- Prevents blocking FastAPI event loop
+- Consistent with existing async patterns
+- yt-dlp download can take 10-60 seconds for long videos
+
+### Error Handling Strategy
+
+**Network failures:** Wrap in try/except, raise HTTPException with 408 timeout or 400 bad request
+**Invalid URLs:** Validate before calling yt-dlp, return 400
+**Age-restricted:** May fail during download, return 403 with clear message
+**Private/deleted:** Return 404 with clear message
+
+### Temp File Management
+
+**Creation:** Use tempfile.mkstemp(suffix='.mp3') for security
+**Cleanup:**
+- CLI: Delete immediately after transcription completes
+- API: Existing worker cleanup logic handles it (temp files deleted after job completes)
+
+**Location:** System temp directory (tempfile module default)
+
+## Architecture Patterns to Follow
+
+### 1. Minimal Surface Area Changes
+
+**Pattern:** Extend file_handler.py, don't refactor existing code
+**Rationale:** v2.0 API architecture is stable, minimize risk
+
+### 2. Unified CLI/API Architecture
+
+**Pattern:** Both CLI and API call the same AudioTranscriber.transcribe_file()
+**Rationale:** Already established in v2.0, maintain consistency
+
+### 3. Async-Aware but Optional
+
+**Pattern:** Provide both sync and async interfaces in youtube_handler.py
+**Rationale:** CLI needs sync, API needs async, don't force async everywhere
+
+### 4. Fail Fast with Clear Errors
+
+**Pattern:** Validate YouTube URLs before starting download
+**Rationale:** Better UX, consistent with existing input validation
+
+### 5. Leverage Existing Temp File Patterns
+
+**Pattern:** Use same tempfile approach as file_handler.py
+**Rationale:** Consistent cleanup, same security properties
+
+## Integration Risks
+
+### Risk 1: yt-dlp Version Compatibility
+**Impact:** YouTube changes API, yt-dlp breaks
+**Mitigation:** Pin yt-dlp version in requirements.txt, update periodically
+**Detection:** Integration tests with real YouTube URLs
+
+### Risk 2: FFmpeg Dependency
+**Impact:** yt-dlp requires FFmpeg for audio extraction, not always installed
+**Mitigation:** Document FFmpeg requirement, detect and error early
+**Detection:** Check for FFmpeg in PATH before calling yt-dlp
+
+### Risk 3: Long Download Times
+**Impact:** Large videos take minutes to download, may hit timeouts
+**Mitigation:** Document expected behavior, consider adding download progress
+**Detection:** Test with long videos (>1 hour)
+
+### Risk 4: JavaScript Runtime Requirement
+**Impact:** yt-dlp now requires external JS runtime (Deno) for some YouTube features
+**Mitigation:** Document requirement, test without JS runtime to see if still works for basic cases
+**Detection:** Test with various YouTube URLs
+
+## Open Questions for Implementation
+
+1. **Should we support playlists?** No for v2.1 (single URLs only), defer to future
+2. **Should we support Vimeo/other platforms?** No for v2.1 (YouTube only), defer to future
+3. **Should we cache downloaded audio?** No for v2.1 (download each time), defer to future
+4. **Should we show download progress?** Nice to have for v2.1, not blocking
+5. **How to handle age-restricted videos?** Document as limitation for v2.1
+6. **Should FFmpeg be bundled?** No, document as system requirement (already required for transcriber.get_audio_duration())
+
+---
+
+*Researched: 2026-01-31*
 
 ## Sources
 
-- [FastAPI Lifespan Events](https://fastapi.tiangolo.com/advanced/events/) - Official documentation for async context manager pattern
-- [FastAPI Concurrency and async/await](https://fastapi.tiangolo.com/async/) - Official guidance on blocking code
-- [FastAPI Background Tasks](https://fastapi.tiangolo.com/tutorial/background-tasks/) - Built-in task handling
-- [aiosqlite GitHub](https://github.com/omnilib/aiosqlite) - Async SQLite library
-- [litequeue](https://github.com/litements/litequeue) - SQLite-based queue pattern reference
-- [FastAPI Best Practices](https://github.com/zhanymkanov/fastapi-best-practices) - Community patterns
-
-**Confidence Assessment:**
-- Component design: HIGH (follows established FastAPI patterns)
-- SQLite schema: HIGH (standard patterns)
-- Worker pattern: MEDIUM (custom implementation, needs testing)
-- File handling: HIGH (standard patterns)
+- [GitHub - yt-dlp/yt-dlp: A feature-rich command-line audio/video downloader](https://github.com/yt-dlp/yt-dlp)
+- [Downloading and Converting YouTube Videos to MP3 using yt-dlp in Python - DEV Community](https://dev.to/_ken0x/downloading-and-converting-youtube-videos-to-mp3-using-yt-dlp-in-python-20c5)
+- [yt-dlp · PyPI](https://pypi.org/project/yt-dlp/)
+- Cesar existing architecture documentation (/home/buckleyrobinson/projects/cesar/docs/architecture.md)
+- Cesar codebase analysis (cli.py, transcriber.py, api/server.py, api/worker.py, api/file_handler.py)
