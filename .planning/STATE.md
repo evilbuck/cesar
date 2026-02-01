@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-01-31)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Phase 7 - YouTube API & CLI Integration
+**Current focus:** Phase 8 - Error Handling & Documentation
 
 ## Current Position
 
-Phase: 7 of 8 (Interface Integration)
-Plan: 3 of 3 in current phase
-Status: Phase complete - all YouTube integration complete
-Last activity: 2026-01-31 — Completed 07-03-PLAN.md
+Phase: 8 of 8 (Error Handling & Documentation)
+Plan: 1 of 3 in current phase
+Status: In progress
+Last activity: 2026-02-01 — Completed 08-01-PLAN.md
 
-Progress: [████████░░] 70% (14/20 total plans complete)
+Progress: [████████░░] 75% (15/20 total plans complete)
 
 ## Performance Metrics
 
@@ -34,13 +34,15 @@ Progress: [████████░░] 70% (14/20 total plans complete)
 | 5. Server Command | 2 | - | - |
 | 6. Core YouTube Module | 1 | 3min | 3min |
 | 7. Interface Integration | 3/3 | 11min | 3.7min |
+| 8. Error Handling & Docs | 1/3 | 3min | 3min |
 
 **Recent Trend:**
 - Phase 6 Plan 01: 3 minutes
 - Phase 7 Plan 01: 3 minutes 22 seconds
 - Phase 7 Plan 02: 3 minutes 6 seconds
 - Phase 7 Plan 03: 5 minutes 7 seconds
-- Trend: Consistent ~3-5 min/plan, gap closure slightly longer
+- Phase 8 Plan 01: 3 minutes
+- Trend: Consistent ~3-5 min/plan
 
 *Metrics will be updated as v2.1 progresses*
 
@@ -67,6 +69,9 @@ Recent decisions affecting current work:
 - v2.1 Phase 7-03: Repository update() includes audio_path - required for YouTube URL->file path replacement
 - v2.1 Phase 7-03: Worker uses asyncio.to_thread for YouTube download - avoid blocking event loop
 - v2.1 Phase 7-03: get_next_queued() returns DOWNLOADING jobs - ensures worker picks up YouTube jobs
+- v2.1 Phase 8-01: Class-level error_type and http_status on exceptions - enables API structured error responses
+- v2.1 Phase 8-01: Video ID in error messages (not full URL) - identification without clutter
+- v2.1 Phase 8-01: Retry suggestions only for network errors - actionable when user can actually do something
 
 ### Findings
 
@@ -105,6 +110,15 @@ Recent decisions affecting current work:
 - 9 new unit tests for YouTube worker integration
 - All 180 project tests pass
 
+**2026-02-01:** Phase 8 Plan 01 complete:
+- Extended exception hierarchy with error_type/http_status class attributes
+- Added YouTubeAgeRestrictedError (403) and YouTubeNetworkError (502)
+- Added extract_video_id() for YouTube URL video ID extraction
+- Enhanced error detection: age-restricted, private, geo-restricted, network, rate-limited
+- Error messages follow "Brief technical (video: {id}). Plain explanation." format
+- 23 new unit tests for error handling
+- All 203 project tests pass
+
 ### Pending Todos
 
 None yet.
@@ -121,15 +135,16 @@ None yet.
 - ✅ Worker YouTube download handling complete (07-03)
 
 **Phase 8 considerations:**
-- End-to-end integration testing with real YouTube URLs needed
-- Verify complete flow: POST YouTube URL -> download -> transcribe -> retrieve result
+- ✅ Enhanced error handling complete (08-01)
+- API error response formatting pending (08-02)
+- Documentation with YouTube examples pending (08-03)
 
 ## Session Continuity
 
-Last session: 2026-01-31
-Stopped at: Completed 07-03-PLAN.md
+Last session: 2026-02-01
+Stopped at: Completed 08-01-PLAN.md
 Resume file: None
-Next step: Phase 7 complete - YouTube integration fully wired through CLI, API, and worker
+Next step: Continue with 08-02-PLAN.md for API error formatting
 
 ## Milestone History
 
