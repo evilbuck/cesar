@@ -35,27 +35,76 @@ _YOUTUBE_REGEX = re.compile('|'.join(YOUTUBE_URL_PATTERNS))
 
 class YouTubeDownloadError(Exception):
     """Base exception for YouTube download errors."""
-    pass
+    error_type = "youtube_error"
+    http_status = 400
 
 
 class YouTubeURLError(YouTubeDownloadError):
     """Invalid or unsupported YouTube URL."""
-    pass
+    error_type = "invalid_youtube_url"
+    http_status = 400
 
 
 class YouTubeUnavailableError(YouTubeDownloadError):
     """Video is unavailable (private, deleted, geo-blocked)."""
-    pass
+    error_type = "video_unavailable"
+    http_status = 404
+
+
+class YouTubeAgeRestrictedError(YouTubeUnavailableError):
+    """Video requires age verification."""
+    error_type = "age_restricted"
+    http_status = 403
 
 
 class YouTubeRateLimitError(YouTubeDownloadError):
     """YouTube rate limiting or bot detection."""
-    pass
+    error_type = "rate_limited"
+    http_status = 429
+
+
+class YouTubeNetworkError(YouTubeDownloadError):
+    """Network-related errors during download."""
+    error_type = "network_error"
+    http_status = 502
 
 
 class FFmpegNotFoundError(YouTubeDownloadError):
     """FFmpeg binary not found on system."""
-    pass
+    error_type = "ffmpeg_not_found"
+    http_status = 503
+
+
+# === Video ID Extraction ===
+
+def extract_video_id(url: str) -> str:
+    """Extract video ID from YouTube URL.
+
+    Args:
+        url: YouTube URL string
+
+    Returns:
+        11-character video ID, or 'unknown' if extraction fails
+    """
+    if not url or not isinstance(url, str):
+        return "unknown"
+
+    # Pattern 1: v= parameter (watch URLs)
+    match = re.search(r'[?&]v=([a-zA-Z0-9_-]{11})', url)
+    if match:
+        return match.group(1)
+
+    # Pattern 2: youtu.be/ID
+    match = re.search(r'youtu\.be/([a-zA-Z0-9_-]{11})', url)
+    if match:
+        return match.group(1)
+
+    # Pattern 3: /shorts/ID, /embed/ID, /v/ID
+    match = re.search(r'(?:/shorts/|/embed/|/v/)([a-zA-Z0-9_-]{11})', url)
+    if match:
+        return match.group(1)
+
+    return "unknown"
 
 
 # === FFmpeg Validation ===
