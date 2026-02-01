@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call — no cloud services, no API keys, no ongoing costs
-**Current focus:** Phase 13 - API Integration (in progress)
+**Current focus:** Phase 13 - API Integration (final plan remaining)
 
 ## Current Position
 
 Phase: 13 of 13 (API Integration)
-Plan: 3 of 3 (13-03 complete, 13-02 pending)
+Plan: 2 of 3 complete (13-03 pending)
 Status: In progress
-Last activity: 2026-02-01 — Completed 13-03-PLAN.md
+Last activity: 2026-02-01 — Completed 13-02-PLAN.md
 
-Progress: [████████████░░░░░░░░] 62% (26 of 42 total plans complete)
+Progress: [████████████░░░░░░░░] 64% (27 of 42 total plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 26
+- Total plans completed: 27
 - Average duration: ~3.0 min/plan (v2.1-v2.6)
-- Total execution time: ~50 min total
+- Total execution time: ~57 min total
 
 **By Phase:**
 
@@ -39,10 +39,10 @@ Progress: [████████████░░░░░░░░] 62% (26
 | 10. Speaker Diarization Core | 2 | 8min | 4min |
 | 11. Orchestration & Formatting | 2 | 6min | 3min |
 | 12. CLI Integration | 1 | 4min | 4min |
-| 13. API Integration | 2/3 | 10min | 5min |
+| 13. API Integration | 2/3 | 12min | 6min |
 
 **Recent Trend:**
-- Last 3 plans: 4min (12-01), 5min (13-01), 5min (13-03)
+- Last 3 plans: 5min (13-01), 5min (13-03), 7min (13-02)
 - Trend: Consistent execution pace
 
 *Updated after each plan completion*
@@ -88,19 +88,20 @@ Recent decisions affecting current work:
 - v2.6: diarized boolean flag for explicit fallback detection
 - v2.6: Union[bool, DiarizeOptions] for flexible API diarize parameter
 - v2.6: Retry endpoint only for PARTIAL status jobs
+- v2.6: Worker uses orchestrator when diarize=True (full pipeline integration)
+- v2.6: Worker HF token resolution: config > env > cache hierarchy
 
 ### Pending Todos
 
-- Execute 13-02-PLAN.md (Worker Integration) - worker has config but doesn't use orchestrator yet
+None.
 
 ### Blockers/Concerns
 
 - Pre-existing test failures in TestYouTubeErrorFormatting and TestCLIConfigLoading (mock issues with CliRunner)
-- 13-02 (Worker Integration) not yet executed - worker imports but doesn't use orchestrator
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 13-03-PLAN.md (Server Endpoints)
+Stopped at: Completed 13-02-PLAN.md (Worker Integration)
 Resume file: None
-Next step: Execute 13-02-PLAN.md (Worker Integration)
+Next step: Execute 13-03-PLAN.md (if not already complete) or Phase 13 complete
