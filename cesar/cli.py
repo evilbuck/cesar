@@ -20,6 +20,12 @@ from rich.progress import (
     TimeRemainingColumn
 )
 
+from cesar.config import (
+    CesarConfig,
+    ConfigError,
+    load_config,
+    get_cli_config_path,
+)
 from cesar.transcriber import AudioTranscriber
 from cesar.utils import format_time, estimate_processing_time
 from cesar.youtube_handler import (
@@ -111,10 +117,28 @@ class ProgressTracker:
 
 @click.group()
 @click.version_option(version=__version__, prog_name="cesar")
-def cli():
+@click.pass_context
+def cli(ctx):
     """Cesar: Offline audio transcription using faster-whisper"""
     # Clean up orphaned temp files from previous sessions on startup
     cleanup_youtube_temp_dir()
+
+    # Load configuration
+    config_path = get_cli_config_path()
+    try:
+        config = load_config(config_path)
+        ctx.ensure_object(dict)
+        ctx.obj['config'] = config
+    except ConfigError as e:
+        console.print(f"[red]Configuration Error:[/red] {e}")
+        sys.exit(1)
+
+    # Show informational message if config file doesn't exist (not blocking)
+    if not config_path.exists():
+        # Check if we're in quiet mode by looking ahead at arguments
+        quiet_mode = '-q' in sys.argv or '--quiet' in sys.argv
+        if not quiet_mode:
+            console.print(f"[dim]Config: {config_path} not found (using defaults)[/dim]")
 
 
 @cli.command(name="transcribe")
@@ -185,7 +209,8 @@ def cli():
     type=click.FloatRange(min=0),
     help='End transcription at N seconds'
 )
-def transcribe(input_source, output, model, device, compute_type, batch_size, num_workers, verbose, quiet, max_duration, start_time, end_time):
+@click.pass_context
+def transcribe(ctx, input_source, output, model, device, compute_type, batch_size, num_workers, verbose, quiet, max_duration, start_time, end_time):
     """
     Transcribe audio files or YouTube videos to text using faster-whisper (offline)
 
@@ -194,6 +219,9 @@ def transcribe(input_source, output, model, device, compute_type, batch_size, nu
     Supported audio formats: MP3, WAV, M4A, OGG, FLAC, AAC, WMA
     Supported URLs: YouTube videos (requires FFmpeg)
     """
+    # Get config from context (config.diarize will be used in Phase 12)
+    config = ctx.obj.get('config', CesarConfig())
+
     # Validate time parameter combinations first, before any operations
     if max_duration and end_time is not None:
         error_msg = "Error: --max-duration cannot be used with --end-time"
