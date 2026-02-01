@@ -92,7 +92,9 @@ class TranscriptionOrchestrator:
         output_path: Path,
         enable_diarization: bool = True,
         keep_intermediate: bool = False,
-        progress_callback: Optional[Callable[[str, float], None]] = None
+        progress_callback: Optional[Callable[[str, float], None]] = None,
+        min_speakers: Optional[int] = None,
+        max_speakers: Optional[int] = None
     ) -> OrchestrationResult:
         """Run full transcription, diarization, and formatting pipeline.
 
@@ -103,6 +105,8 @@ class TranscriptionOrchestrator:
             keep_intermediate: Whether to save intermediate debug files
             progress_callback: Optional callback for progress updates
                               Called with (step_name, overall_percentage)
+            min_speakers: Minimum expected speakers (passed to diarizer)
+            max_speakers: Maximum expected speakers (passed to diarizer)
 
         Returns:
             OrchestrationResult with metrics and output path
@@ -156,6 +160,8 @@ class TranscriptionOrchestrator:
                 start = time.time()
                 diarization_result = self.diarizer.diarize(
                     str(audio_path),
+                    min_speakers=min_speakers,
+                    max_speakers=max_speakers,
                     progress_callback=lambda msg: progress_callback(
                         "Detecting speakers...", 75.0
                     ) if progress_callback else None
