@@ -263,6 +263,67 @@ class TestYouTubeErrorFormatting(unittest.TestCase):
         self.assertNotIn('Cause:', result.output)
 
 
+class TestDiarizationCLI(unittest.TestCase):
+    """Tests for diarization CLI integration."""
+
+    def setUp(self):
+        """Set up test environment."""
+        self.runner = CliRunner()
+        self.temp_dir = tempfile.mkdtemp()
+        self.output_file = Path(self.temp_dir) / "output.txt"
+
+    def tearDown(self):
+        """Clean up test files."""
+        import shutil
+        shutil.rmtree(self.temp_dir)
+
+    def test_diarize_flag_default_true(self):
+        """Test that --diarize flag defaults to True in help text."""
+        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn('--diarize', result.output)
+        self.assertIn('--no-diarize', result.output)
+        # Default should be shown as diarize (True)
+        self.assertIn('default: diarize', result.output.lower())
+
+    def test_no_diarize_flag_accepted(self):
+        """Test that --no-diarize flag is recognized."""
+        # Just verify the flag is accepted in argument parsing
+        # (actual transcription test requires audio file)
+        result = self.runner.invoke(cli, ['transcribe', '--no-diarize', '--help'])
+        self.assertEqual(result.exit_code, 0)
+
+    def test_output_extension_validation_md_for_diarize(self):
+        """Test that output gets .md extension when diarize=True."""
+        from cesar.cli import validate_output_extension
+
+        output = Path('/tmp/transcript.txt')
+        corrected = validate_output_extension(output, diarize=True, quiet=True)
+        self.assertEqual(corrected.suffix, '.md')
+
+    def test_output_extension_validation_txt_for_no_diarize(self):
+        """Test that output gets .txt extension when diarize=False."""
+        from cesar.cli import validate_output_extension
+
+        output = Path('/tmp/transcript.md')
+        corrected = validate_output_extension(output, diarize=False, quiet=True)
+        self.assertEqual(corrected.suffix, '.txt')
+
+    def test_output_extension_no_change_when_correct(self):
+        """Test that correct extensions are not changed."""
+        from cesar.cli import validate_output_extension
+
+        # .md with diarize=True should stay .md
+        output = Path('/tmp/transcript.md')
+        corrected = validate_output_extension(output, diarize=True, quiet=True)
+        self.assertEqual(corrected, output)
+
+        # .txt with diarize=False should stay .txt
+        output = Path('/tmp/transcript.txt')
+        corrected = validate_output_extension(output, diarize=False, quiet=True)
+        self.assertEqual(corrected, output)
+
+
 class TestCLIConfigLoading(unittest.TestCase):
     """Tests for CLI config file loading."""
 
