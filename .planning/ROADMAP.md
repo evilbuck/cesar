@@ -119,11 +119,11 @@ Plans:
   3. User sees progress feedback during diarization process (separate from transcription)
   4. User can specify minimum number of speakers via config or parameter
   5. User can specify maximum number of speakers via config or parameter
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 10-01: TBD
-- [ ] 10-02: TBD
+- [ ] 10-01-PLAN.md — Core diarization module (pyannote pipeline, HF token, GPU detection)
+- [ ] 10-02-PLAN.md — Timestamp alignment (temporal intersection, segment splitting)
 
 #### Phase 11: Orchestration & Formatting
 **Goal**: Coordinate transcription with diarization and format speaker-labeled output
@@ -185,7 +185,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 7. CLI & API Integration | v2.1 | 3/3 | Complete | 2026-02-01 |
 | 8. Error Handling & Documentation | v2.1 | 2/2 | Complete | 2026-02-01 |
 | 9. Configuration System | v2.2 | 2/2 | Complete | 2026-02-01 |
-| 10. Speaker Diarization Core | v2.2 | 0/TBD | Not started | - |
+| 10. Speaker Diarization Core | v2.2 | 0/2 | Not started | - |
 | 11. Orchestration & Formatting | v2.2 | 0/TBD | Not started | - |
 | 12. CLI Integration | v2.2 | 0/TBD | Not started | - |
 | 13. API Integration | v2.2 | 0/TBD | Not started | - |
