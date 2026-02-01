@@ -164,10 +164,12 @@ Plans:
   3. Speaker identification works with YouTube videos via API
   4. API job responses include speaker count when diarization enabled
   5. API job status tracking includes diarization progress phase
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 13-01: TBD
+- [ ] 13-01: Models, database, and repository for diarization fields
+- [ ] 13-02: Worker integration with orchestrator
+- [ ] 13-03: Server endpoints and retry functionality
 
 ## Progress
 
@@ -188,4 +190,4 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 10. Speaker Diarization Core | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 11. Orchestration & Formatting | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 12. CLI Integration | v2.2 | 1/1 | Complete | 2026-02-01 |
-| 13. API Integration | v2.2 | 0/TBD | Not started | - |
+| 13. API Integration | v2.2 | 0/3 | Not started | - |
