@@ -8,6 +8,7 @@ from pathlib import Path
 from typing import Optional, Callable, Dict, Any
 
 from cesar.device_detection import OptimalConfiguration, setup_environment
+from cesar.timestamp_aligner import TranscriptionSegment
 
 
 class AudioTranscriber:
@@ -256,6 +257,107 @@ class AudioTranscriber:
             'segment_count': segment_count,
             'output_path': str(output_file)
         }
+
+    def transcribe_to_segments(
+        self,
+        input_path: str,
+        progress_callback: Optional[Callable[[float, int, float], None]] = None,
+        max_duration_minutes: Optional[int] = None,
+        start_time_seconds: Optional[float] = None,
+        end_time_seconds: Optional[float] = None
+    ) -> tuple[list[TranscriptionSegment], Dict[str, Any]]:
+        """
+        Transcribe audio file and return segments with timestamps.
+
+        Similar to transcribe_file() but returns segment data instead of writing to file.
+        This enables the orchestrator to pass segments to the timestamp aligner.
+
+        Args:
+            input_path: Path to input audio file
+            progress_callback: Optional callback for progress updates
+            max_duration_minutes: Optional limit to first N minutes
+            start_time_seconds: Optional start time
+            end_time_seconds: Optional end time
+
+        Returns:
+            Tuple of (segments, metadata) where:
+            - segments: List of TranscriptionSegment(start, end, text)
+            - metadata: Dict with language, language_probability, audio_duration,
+                       processing_time, speed_ratio, segment_count
+        """
+        # Validate input
+        input_file = self.validate_input_file(input_path)
+
+        # Get audio duration
+        audio_duration = self.get_audio_duration(input_file)
+
+        # Load model if needed
+        self._load_model()
+
+        # Start transcription
+        start_time = time.time()
+
+        # Prepare transcription parameters
+        transcribe_kwargs = {
+            'beam_size': 5,
+            'vad_filter': True,
+            'vad_parameters': dict(min_silence_duration_ms=1000),
+            'temperature': 0.0
+        }
+
+        # Add time limiting if specified
+        if max_duration_minutes is not None:
+            clip_end_seconds = max_duration_minutes * 60
+            transcribe_kwargs['clip_timestamps'] = f"0,{clip_end_seconds}"
+        elif start_time_seconds is not None or end_time_seconds is not None:
+            start = start_time_seconds or 0
+            end = end_time_seconds or audio_duration
+            transcribe_kwargs['clip_timestamps'] = f"{start},{end}"
+
+        # Transcribe
+        segments_iter, info = self.model.transcribe(
+            str(input_file),
+            **transcribe_kwargs
+        )
+
+        # Collect segments with progress tracking
+        segments = []
+        segment_count = 0
+        last_segment_end = 0
+        last_progress_update = time.time()
+
+        for segment in segments_iter:
+            # Add segment to list
+            segments.append(TranscriptionSegment(
+                start=segment.start,
+                end=segment.end,
+                text=segment.text.strip()
+            ))
+
+            segment_count += 1
+            last_segment_end = segment.end
+
+            # Call progress callback if provided
+            if progress_callback and time.time() - last_progress_update >= 1.0:
+                progress_percentage = min((last_segment_end / audio_duration) * 100, 100)
+                elapsed_time = time.time() - start_time
+                progress_callback(progress_percentage, segment_count, elapsed_time)
+                last_progress_update = time.time()
+
+        # Calculate final metrics
+        total_time = time.time() - start_time
+        speed_ratio = audio_duration / total_time if total_time > 0 else 0
+
+        metadata = {
+            'language': info.language,
+            'language_probability': info.language_probability,
+            'audio_duration': audio_duration,
+            'processing_time': total_time,
+            'speed_ratio': speed_ratio,
+            'segment_count': segment_count
+        }
+
+        return segments, metadata
 
     def get_model_info(self) -> Dict[str, Any]:
         """Get information about the current model configuration"""
