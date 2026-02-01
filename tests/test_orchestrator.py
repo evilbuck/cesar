@@ -135,6 +135,8 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
         # Verify diarizer called
         self.diarizer.diarize.assert_called_once_with(
             str(self.audio_path),
+            min_speakers=None,
+            max_speakers=None,
             progress_callback=unittest.mock.ANY
         )
 
