@@ -24,6 +24,7 @@ class CesarConfig(BaseModel):
         diarize: Enable speaker identification (speaker labels in output)
         min_speakers: Minimum number of speakers to detect (must be >= 1 if set)
         max_speakers: Maximum number of speakers to detect (must be >= 1 if set)
+        hf_token: HuggingFace token for pyannote model download
     """
 
     model_config = ConfigDict(
@@ -34,6 +35,7 @@ class CesarConfig(BaseModel):
     diarize: bool = False
     min_speakers: Optional[int] = None
     max_speakers: Optional[int] = None
+    hf_token: Optional[str] = None
 
     @field_validator('min_speakers', 'max_speakers')
     @classmethod
@@ -150,6 +152,13 @@ diarize = false
 # Must be >= 1 if specified, and >= min_speakers
 # Default: auto-detect (leave commented)
 # Example: max_speakers = 4
+
+# HuggingFace token for speaker diarization model download
+# Required on first use to download pyannote models
+# Get your token at: https://hf.co/settings/tokens
+# Accept model conditions at: https://hf.co/pyannote/speaker-diarization-3.1
+# Default: use cached token from ~/.cache/huggingface/token
+# Example: hf_token = "hf_xxxxx"
 """
 
 
