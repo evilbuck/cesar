@@ -22,10 +22,11 @@ class TestJobStatus(unittest.TestCase):
     """Tests for JobStatus enum."""
 
     def test_all_status_values_exist(self):
-        """All four status values should exist."""
+        """All five status values should exist."""
         statuses = list(JobStatus)
-        self.assertEqual(len(statuses), 4)
+        self.assertEqual(len(statuses), 5)
         self.assertIn(JobStatus.QUEUED, statuses)
+        self.assertIn(JobStatus.DOWNLOADING, statuses)
         self.assertIn(JobStatus.PROCESSING, statuses)
         self.assertIn(JobStatus.COMPLETED, statuses)
         self.assertIn(JobStatus.ERROR, statuses)
@@ -33,6 +34,7 @@ class TestJobStatus(unittest.TestCase):
     def test_status_values_are_strings(self):
         """Status values should be lowercase strings."""
         self.assertEqual(JobStatus.QUEUED.value, "queued")
+        self.assertEqual(JobStatus.DOWNLOADING.value, "downloading")
         self.assertEqual(JobStatus.PROCESSING.value, "processing")
         self.assertEqual(JobStatus.COMPLETED.value, "completed")
         self.assertEqual(JobStatus.ERROR.value, "error")
@@ -263,6 +265,40 @@ class TestSerialization(unittest.TestCase):
         self.assertEqual(recreated.id, original.id)
         self.assertEqual(recreated.audio_path, original.audio_path)
         self.assertEqual(recreated.result_text, original.result_text)
+
+
+class TestDownloadProgress:
+    """Tests for download_progress field validation."""
+
+    def test_download_progress_none_for_regular_jobs(self):
+        """Test download_progress defaults to None."""
+        job = Job(audio_path="/tmp/test.mp3")
+        assert job.download_progress is None
+
+    def test_download_progress_accepts_valid_values(self):
+        """Test download_progress accepts 0-100."""
+        job = Job(audio_path="/tmp/test.mp3", download_progress=0)
+        assert job.download_progress == 0
+
+        job = Job(audio_path="/tmp/test.mp3", download_progress=50)
+        assert job.download_progress == 50
+
+        job = Job(audio_path="/tmp/test.mp3", download_progress=100)
+        assert job.download_progress == 100
+
+    def test_download_progress_rejects_negative(self):
+        """Test download_progress rejects negative values."""
+        import pytest
+
+        with pytest.raises(ValidationError):
+            Job(audio_path="/tmp/test.mp3", download_progress=-1)
+
+    def test_download_progress_rejects_over_100(self):
+        """Test download_progress rejects values over 100."""
+        import pytest
+
+        with pytest.raises(ValidationError):
+            Job(audio_path="/tmp/test.mp3", download_progress=101)
 
 
 if __name__ == "__main__":

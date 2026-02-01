@@ -81,6 +81,32 @@ class TestHealthEndpoint(unittest.TestCase):
         data = response.json()
         self.assertIn(data["worker"], ["running", "stopped"])
 
+    @patch('cesar.api.server.check_ffmpeg_available')
+    def test_health_reports_youtube_available(self, mock_ffmpeg):
+        """Test health endpoint reports YouTube available when FFmpeg present."""
+        mock_ffmpeg.return_value = (True, "")
+
+        response = self.client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("youtube", data)
+        self.assertTrue(data["youtube"]["available"])
+        self.assertIn("supported", data["youtube"]["message"].lower())
+
+    @patch('cesar.api.server.check_ffmpeg_available')
+    def test_health_reports_youtube_unavailable(self, mock_ffmpeg):
+        """Test health endpoint reports YouTube unavailable when FFmpeg missing."""
+        mock_ffmpeg.return_value = (False, "FFmpeg not found")
+
+        response = self.client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("youtube", data)
+        self.assertFalse(data["youtube"]["available"])
+        self.assertIn("FFmpeg", data["youtube"]["message"])
+
     def test_openapi_docs_available(self):
         """GET /docs should return 200 (Swagger UI)."""
         response = self.client.get("/docs")
