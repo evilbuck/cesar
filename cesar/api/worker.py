@@ -175,9 +175,9 @@ class BackgroundWorker:
     async def _process_job(self, job) -> None:
         """Process a single transcription job.
 
-        Handles YouTube downloads for DOWNLOADING status jobs, then runs transcription.
-        Updates job status to PROCESSING, runs transcription in thread pool,
-        and updates job with results or error message.
+        Handles YouTube downloads for DOWNLOADING status jobs, then runs transcription
+        with optional diarization. Updates job status and handles partial failures
+        gracefully (transcription OK but diarization failed).
 
         Args:
             job: Job instance to process
@@ -186,10 +186,17 @@ class BackgroundWorker:
         logger.info(f"Processing job {job.id}: {job.audio_path}")
 
         try:
+            # Check for retry scenario: job has result_text but diarization_error
+            is_retry = (
+                job.result_text is not None and
+                job.diarization_error is not None
+            )
+
             # Handle YouTube download phase
             if job.status == JobStatus.DOWNLOADING:
                 # Update progress to 0 (starting download)
                 job.download_progress = 0
+                self._update_progress(job, "downloading", 0, 0)
                 job.started_at = datetime.utcnow()
                 await self.repository.update(job)
 
@@ -203,6 +210,7 @@ class BackgroundWorker:
                     job.download_progress = 100
                     job.audio_path = str(audio_path)  # Replace URL with file path
                     job.status = JobStatus.PROCESSING
+                    self._update_progress(job, "transcribing", 0, 0)
                     await self.repository.update(job)
                 except (YouTubeDownloadError, FFmpegNotFoundError) as e:
                     job.status = JobStatus.ERROR
@@ -214,23 +222,54 @@ class BackgroundWorker:
                 # Regular job - update to PROCESSING
                 job.status = JobStatus.PROCESSING
                 job.started_at = datetime.utcnow()
+                self._update_progress(job, "transcribing", 0, 0)
                 await self.repository.update(job)
 
-            # Run transcription in thread pool (blocking operation)
+            # Run transcription with orchestrator in thread pool (blocking operation)
             result = await asyncio.to_thread(
-                self._run_transcription,
+                self._run_transcription_with_orchestrator,
                 job.audio_path,
-                job.model_size
+                job.model_size,
+                job.diarize,
+                job.min_speakers,
+                job.max_speakers,
+                is_retry
             )
 
-            # Update to COMPLETED status
-            job.status = JobStatus.COMPLETED
+            # Update job with results
             job.completed_at = datetime.utcnow()
             job.result_text = result["text"]
-            job.detected_language = result["language"]
+            job.detected_language = result.get("language", "unknown")
+
+            # Handle diarization-specific results
+            if result.get("diarization_error_code"):
+                # Diarization was requested but failed
+                job.status = JobStatus.PARTIAL
+                job.diarization_error_code = result["diarization_error_code"]
+                job.diarization_error = result.get("diarization_error", "Diarization failed")
+                job.diarized = False
+                job.speaker_count = None
+            elif result.get("diarization_succeeded") is False and job.diarize:
+                # Orchestrator reported diarization failure
+                job.status = JobStatus.PARTIAL
+                job.diarization_error = "Diarization failed during processing"
+                job.diarization_error_code = "diarization_failed"
+                job.diarized = False
+                job.speaker_count = None
+            else:
+                # Success (or diarization not requested)
+                job.status = JobStatus.COMPLETED
+                if result.get("diarization_succeeded"):
+                    job.diarized = True
+                    job.speaker_count = result.get("speaker_count", 0)
+                else:
+                    job.diarized = False
+                    job.speaker_count = None
+
+            self._update_progress(job, "formatting", 100, 100)
             await self.repository.update(job)
 
-            logger.info(f"Job {job.id} completed successfully")
+            logger.info(f"Job {job.id} completed with status {job.status.value}")
 
         except Exception as e:
             # Update to ERROR status
@@ -284,3 +323,145 @@ class BackgroundWorker:
         finally:
             # Clean up temp file
             temp_output_path.unlink(missing_ok=True)
+
+    def _run_transcription_with_orchestrator(
+        self,
+        audio_path: str,
+        model_size: str,
+        diarize: bool,
+        min_speakers: Optional[int],
+        max_speakers: Optional[int],
+        is_retry: bool = False
+    ) -> Dict:
+        """Run transcription with optional diarization using orchestrator.
+
+        This method is called in a thread pool to avoid blocking the event loop.
+        Uses TranscriptionOrchestrator when diarization is requested.
+
+        Args:
+            audio_path: Path to audio file
+            model_size: Whisper model size to use
+            diarize: Whether to enable speaker diarization
+            min_speakers: Minimum expected speakers (optional)
+            max_speakers: Maximum expected speakers (optional)
+            is_retry: Whether this is a retry of a partial job
+
+        Returns:
+            Dictionary with transcription results:
+            - text: Transcription text
+            - language: Detected language
+            - diarization_succeeded: Whether diarization worked (if requested)
+            - speaker_count: Number of speakers (if diarization succeeded)
+            - diarization_error_code: Error code if diarization failed
+            - diarization_error: Error message if diarization failed
+        """
+        # Create temporary output file
+        fd, temp_output = tempfile.mkstemp(suffix='.md' if diarize else '.txt')
+        temp_output_path = Path(temp_output)
+
+        try:
+            os.close(fd)
+
+            # Create transcriber
+            transcriber = AudioTranscriber(model_size=model_size)
+
+            if not diarize:
+                # Simple transcription without diarization
+                result = transcriber.transcribe_file(audio_path, str(temp_output_path))
+
+                with open(temp_output_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+
+                return {
+                    "text": text,
+                    "language": result.get("language", "unknown"),
+                    "diarization_succeeded": False,
+                    "speaker_count": None
+                }
+
+            # Diarization requested - check for HF token
+            hf_token = self._get_hf_token()
+            if not hf_token:
+                # No HF token available - run transcription only, report partial
+                result = transcriber.transcribe_file(audio_path, str(temp_output_path))
+
+                with open(temp_output_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+
+                return {
+                    "text": text,
+                    "language": result.get("language", "unknown"),
+                    "diarization_succeeded": False,
+                    "diarization_error_code": "hf_token_required",
+                    "diarization_error": (
+                        "HuggingFace token required for speaker diarization. "
+                        "Set hf_token in config or HF_TOKEN environment variable."
+                    )
+                }
+
+            # Create diarizer and orchestrator
+            try:
+                diarizer = SpeakerDiarizer(hf_token=hf_token)
+                orchestrator = TranscriptionOrchestrator(
+                    transcriber=transcriber,
+                    diarizer=diarizer
+                )
+
+                # Run orchestration
+                orch_result = orchestrator.orchestrate(
+                    audio_path=Path(audio_path),
+                    output_path=temp_output_path,
+                    enable_diarization=True,
+                    min_speakers=min_speakers,
+                    max_speakers=max_speakers
+                )
+
+                # Read the result text
+                with open(orch_result.output_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+
+                return {
+                    "text": text,
+                    "language": "unknown",  # orchestrator doesn't return language
+                    "diarization_succeeded": orch_result.diarization_succeeded,
+                    "speaker_count": orch_result.speakers_detected if orch_result.diarization_succeeded else None
+                }
+
+            except AuthenticationError as e:
+                # HF token invalid - run transcription only
+                logger.warning(f"HuggingFace authentication failed: {e}")
+                result = transcriber.transcribe_file(audio_path, str(temp_output_path))
+
+                with open(temp_output_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+
+                return {
+                    "text": text,
+                    "language": result.get("language", "unknown"),
+                    "diarization_succeeded": False,
+                    "diarization_error_code": "hf_token_invalid",
+                    "diarization_error": str(e)
+                }
+
+            except DiarizationError as e:
+                # Generic diarization failure - run transcription only
+                logger.warning(f"Diarization failed: {e}")
+                result = transcriber.transcribe_file(audio_path, str(temp_output_path))
+
+                with open(temp_output_path, 'r', encoding='utf-8') as f:
+                    text = f.read()
+
+                return {
+                    "text": text,
+                    "language": result.get("language", "unknown"),
+                    "diarization_succeeded": False,
+                    "diarization_error_code": "diarization_failed",
+                    "diarization_error": str(e)
+                }
+
+        finally:
+            # Clean up temp file(s)
+            temp_output_path.unlink(missing_ok=True)
+            # Also try to clean up .txt if we created .md
+            if diarize:
+                Path(str(temp_output_path).replace('.md', '.txt')).unlink(missing_ok=True)
