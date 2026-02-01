@@ -74,8 +74,9 @@ class JobRepository:
             """
             INSERT INTO jobs (id, status, audio_path, model_size,
                               created_at, started_at, completed_at,
-                              result_text, detected_language, error_message)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              result_text, detected_language, error_message,
+                              download_progress)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job.id,
@@ -88,6 +89,7 @@ class JobRepository:
                 job.result_text,
                 job.detected_language,
                 job.error_message,
+                job.download_progress,
             ),
         )
         await self._connection.commit()
@@ -113,7 +115,8 @@ class JobRepository:
     async def update(self, job: Job) -> Job:
         """Update existing job.
 
-        Updates all mutable fields: status, timestamps, results, error.
+        Updates all mutable fields: status, timestamps, results, error, audio_path, download_progress.
+        Note: audio_path is updated to support YouTube download flow (URL -> downloaded file path).
 
         Args:
             job: Job model instance with updated values
@@ -124,17 +127,20 @@ class JobRepository:
         await self._connection.execute(
             """
             UPDATE jobs SET
-                status = ?, started_at = ?, completed_at = ?,
-                result_text = ?, detected_language = ?, error_message = ?
+                status = ?, audio_path = ?, started_at = ?, completed_at = ?,
+                result_text = ?, detected_language = ?, error_message = ?,
+                download_progress = ?
             WHERE id = ?
             """,
             (
                 job.status.value,
+                job.audio_path,
                 job.started_at.isoformat() if job.started_at else None,
                 job.completed_at.isoformat() if job.completed_at else None,
                 job.result_text,
                 job.detected_language,
                 job.error_message,
+                job.download_progress,
                 job.id,
             ),
         )
@@ -154,15 +160,16 @@ class JobRepository:
             return [self._row_to_job(row) for row in rows]
 
     async def get_next_queued(self) -> Optional[Job]:
-        """Get the oldest queued job.
+        """Get the next job that needs processing (QUEUED or DOWNLOADING status).
 
+        Returns jobs in FIFO order by created_at timestamp.
         Used by the worker to pick up the next job to process.
 
         Returns:
-            Oldest queued Job, or None if no queued jobs
+            Oldest queued or downloading Job, or None if none available
         """
         async with self._connection.execute(
-            "SELECT * FROM jobs WHERE status = 'queued' ORDER BY created_at ASC LIMIT 1"
+            "SELECT * FROM jobs WHERE status IN ('queued', 'downloading') ORDER BY created_at ASC LIMIT 1"
         ) as cursor:
             row = await cursor.fetchone()
             if row:
@@ -189,4 +196,5 @@ class JobRepository:
             result_text=row[7],
             detected_language=row[8],
             error_message=row[9],
+            download_progress=row[10],
         )

@@ -22,7 +22,8 @@ CREATE TABLE IF NOT EXISTS jobs (
     completed_at TEXT,
     result_text TEXT,
     detected_language TEXT,
-    error_message TEXT
+    error_message TEXT,
+    download_progress INTEGER CHECK(download_progress >= 0 AND download_progress <= 100)
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);

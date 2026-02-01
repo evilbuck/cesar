@@ -265,6 +265,111 @@ class TestBackgroundWorker(unittest.IsolatedAsyncioTestCase):
             self.assertIsNotNone(retrieved.started_at)
             self.assertIsNotNone(retrieved.completed_at)
 
+    async def test_worker_processes_downloading_job(self):
+        """Test worker processes DOWNLOADING job through download and transcription."""
+        from pathlib import Path
+
+        # Create a job with DOWNLOADING status
+        job = Job(
+            audio_path="https://www.youtube.com/watch?v=test",
+            model_size="base",
+            status=JobStatus.DOWNLOADING,
+            download_progress=0
+        )
+        await self.repo.create(job)
+
+        # Mock download_youtube_audio to return a path
+        mock_download_path = Path("/tmp/downloaded_audio.m4a")
+
+        with patch('cesar.api.worker.download_youtube_audio', return_value=mock_download_path):
+            with patch.object(
+                self.worker, '_run_transcription',
+                return_value={"text": "YouTube transcription", "language": "en"}
+            ):
+                # Start worker task
+                worker_task = asyncio.create_task(self.worker.run())
+
+                # Wait for processing
+                await asyncio.sleep(0.3)
+
+                # Shutdown worker
+                await self.worker.shutdown()
+                await worker_task
+
+        # Verify job transitions: DOWNLOADING -> PROCESSING -> COMPLETED
+        retrieved = await self.repo.get(job.id)
+        self.assertEqual(retrieved.status, JobStatus.COMPLETED)
+        self.assertEqual(retrieved.download_progress, 100)
+        self.assertEqual(retrieved.audio_path, str(mock_download_path))
+        self.assertEqual(retrieved.result_text, "YouTube transcription")
+        self.assertIsNotNone(retrieved.started_at)
+        self.assertIsNotNone(retrieved.completed_at)
+
+    async def test_worker_downloading_error_sets_error_status(self):
+        """Test worker sets ERROR status when YouTube download fails."""
+        from cesar.youtube_handler import YouTubeDownloadError
+
+        # Create a job with DOWNLOADING status
+        job = Job(
+            audio_path="https://www.youtube.com/watch?v=invalid",
+            model_size="base",
+            status=JobStatus.DOWNLOADING,
+            download_progress=0
+        )
+        await self.repo.create(job)
+
+        # Mock download to fail
+        with patch('cesar.api.worker.download_youtube_audio', side_effect=YouTubeDownloadError("Video unavailable")):
+            # Start worker task
+            worker_task = asyncio.create_task(self.worker.run())
+
+            # Wait for processing
+            await asyncio.sleep(0.3)
+
+            # Shutdown worker
+            await self.worker.shutdown()
+            await worker_task
+
+        # Verify job marked as ERROR with message
+        retrieved = await self.repo.get(job.id)
+        self.assertEqual(retrieved.status, JobStatus.ERROR)
+        self.assertIn("Video unavailable", retrieved.error_message)
+        self.assertIsNotNone(retrieved.completed_at)
+        self.assertIsNone(retrieved.result_text)
+
+    async def test_worker_queued_job_unchanged(self):
+        """Test existing QUEUED job behavior still works (regression test)."""
+        # Create a regular QUEUED job
+        job = Job(audio_path="/test/audio.mp3", model_size="base")
+        await self.repo.create(job)
+
+        # Verify initial status
+        self.assertEqual(job.status, JobStatus.QUEUED)
+        self.assertIsNone(job.download_progress)
+
+        # Mock transcription
+        with patch.object(
+            self.worker, '_run_transcription',
+            return_value={"text": "Regular transcription", "language": "en"}
+        ):
+            # Start worker task
+            worker_task = asyncio.create_task(self.worker.run())
+
+            # Wait for processing
+            await asyncio.sleep(0.3)
+
+            # Shutdown worker
+            await self.worker.shutdown()
+            await worker_task
+
+        # Verify job completed normally
+        retrieved = await self.repo.get(job.id)
+        self.assertEqual(retrieved.status, JobStatus.COMPLETED)
+        self.assertEqual(retrieved.result_text, "Regular transcription")
+        self.assertIsNone(retrieved.download_progress)  # Should remain None for regular jobs
+        self.assertIsNotNone(retrieved.started_at)
+        self.assertIsNotNone(retrieved.completed_at)
+
 
 class TestBackgroundWorkerTranscription(unittest.TestCase):
     """Test cases for _run_transcription method."""

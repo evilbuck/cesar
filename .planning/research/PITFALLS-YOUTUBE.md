@@ -1,0 +1,568 @@
+# Pitfalls Research: YouTube Integration with yt-dlp
+
+**Domain:** Integrating yt-dlp for YouTube audio download into offline transcription tool
+**Researched:** 2026-01-31
+**Confidence:** MEDIUM (verified with official issues, community reports, technical documentation)
+
+## Executive Summary
+
+Adding yt-dlp to Cesar introduces complexity beyond simple dependency installation. The primary risks are: (1) temporary file leakage from incomplete downloads, (2) FFmpeg dependency management, (3) YouTube's anti-bot countermeasures requiring frequent yt-dlp updates, (4) Python API error handling that differs from CLI behavior, and (5) offline-first architecture tension with network-dependent operations.
+
+These pitfalls can derail the milestone if not addressed proactively in planning.
+
+---
+
+## Critical Pitfalls
+
+### P1: Temporary File Leakage from Failed Downloads
+
+**Risk:** yt-dlp creates intermediate files during audio extraction that are not cleaned up on failures, crashes, or interruptions. For large files requiring FFmpeg merging, this can triple storage requirements. Over time, `/tmp` fills up with orphaned `.part`, `.webm`, and `.f*` files.
+
+**Warning Signs:**
+- Disk space grows after failed transcriptions
+- Files matching `*.part`, `*.f251`, `*.webm` accumulate in temp directory
+- Download interruptions (Ctrl+C, network timeout) leave artifacts
+
+**Prevention:**
+- **Explicit cleanup in finally blocks**: Wrap all `YoutubeDL.download()` calls with try/finally to ensure temp file removal
+- **Custom temp directory**: Use `--paths temp:DIR` option to isolate yt-dlp temp files from system temp
+- **Cleanup on startup**: Check for orphaned files on API worker startup (similar to existing job recovery pattern)
+- **Monitor disk usage**: Log warnings when temp directory exceeds threshold
+
+**Example cleanup pattern:**
+```python
+temp_dir = Path("/path/to/isolated/temp")
+ydl_opts = {
+    'paths': {'temp': str(temp_dir)},
+    'outtmpl': str(output_path),
+}
+try:
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+finally:
+    # Clean up any .part, .webm, .f* files in temp_dir
+    for pattern in ['*.part', '*.webm', '*.f*']:
+        for f in temp_dir.glob(pattern):
+            f.unlink(missing_ok=True)
+```
+
+**Phase:** Phase 1 (Core Integration) — Critical for reliability
+
+**Sources:**
+- [yt-dlp Issue #11674: Cleanup temporary files before exiting](https://github.com/yt-dlp/yt-dlp/issues/11674)
+- [yt-dlp Issue #5463: Delete unfinished cache files when download fails](https://github.com/yt-dlp/yt-dlp/issues/5463)
+- [yt-dlp Issue #14042: Large downloads triple storage with merger temp files](https://github.com/yt-dlp/yt-dlp/issues/14042)
+
+---
+
+### P2: FFmpeg Missing or Incompatible
+
+**Risk:** yt-dlp requires FFmpeg for audio extraction (`-x` flag) and format conversion. If FFmpeg is missing, yt-dlp downloads video-only or audio-only streams but cannot merge them. If FFmpeg version has known bugs, postprocessing fails with cryptic errors like "Conversion failed" or "audio codec detection failed with ffprobe".
+
+**Warning Signs:**
+- yt-dlp warning: "FFmpeg is not installed, merging formats is not possible"
+- Postprocessing errors: `yt_dlp.postprocessor.ffmpeg.FFmpegPostProcessorError`
+- Downloads succeed but audio extraction fails
+- Wrong file extension (e.g., `.webm` instead of `.mp3`)
+
+**Prevention:**
+- **Validate FFmpeg on startup**: Check `shutil.which('ffmpeg')` and `shutil.which('ffprobe')` before accepting YouTube jobs
+- **Add to installation docs**: Document FFmpeg as required dependency (already required for `ffprobe` duration detection)
+- **Return clear error**: If FFmpeg missing, return 503 Service Unavailable with actionable message
+- **Test with FFmpeg versions**: Verify compatibility with common versions (ffmpeg 4.x, 5.x, 6.x)
+- **Consider yt-dlp's custom FFmpeg builds**: yt-dlp provides patched FFmpeg builds at yt-dlp/FFmpeg-Builds to avoid known bugs
+
+**Health check enhancement:**
+```python
+# In GET /health endpoint
+ffmpeg_available = shutil.which('ffmpeg') is not None
+ffprobe_available = shutil.which('ffprobe') is not None
+return {
+    "status": "healthy",
+    "youtube_support": ffmpeg_available and ffprobe_available,
+    "dependencies": {
+        "ffmpeg": ffmpeg_available,
+        "ffprobe": ffprobe_available
+    }
+}
+```
+
+**Phase:** Phase 1 (Core Integration) — Block job submission if missing
+
+**Sources:**
+- [yt-dlp Issue #1228: Postprocessing Conversion Failed](https://github.com/yt-dlp/yt-dlp/issues/1228)
+- [yt-dlp Issue #871: FFmpegPostProcessorError conversion failed](https://github.com/yt-dlp/yt-dlp/issues/871)
+- [Linux Mint Forums: FFmpeg vs Python package confusion](https://forums.linuxmint.com/viewtopic.php?t=439873)
+- [yt-dlp FFmpeg documentation](https://github.com/yt-dlp/yt-dlp)
+
+---
+
+### P3: YouTube Rate Limiting and PO Token Enforcement
+
+**Risk:** YouTube actively implements anti-bot measures including download speed throttling, PO Token requirements (cannot be generated by yt-dlp), and IP-based rate limiting. Heavy usage or account-based downloads risk temporary/permanent bans. yt-dlp's workarounds change frequently.
+
+**Warning Signs:**
+- HTTP 403 Forbidden errors from YouTube
+- Download speeds throttled to ~50 KB/s (YouTube's current anti-bot limit)
+- Errors mentioning "Sign in to confirm you're not a bot"
+- yt-dlp requesting PO Token that cannot be provided
+
+**Prevention:**
+- **Rate limiting on server**: Limit concurrent YouTube downloads to 1-2, queue additional requests
+- **Avoid account cookies**: Don't support `--cookies` option — guest access only to avoid account bans
+- **Frequent yt-dlp updates**: YouTube breaks yt-dlp regularly; pin yt-dlp version but monitor for critical updates
+- **Add delay between requests**: Use `-t sleep:5` equivalent (5-10 second delay) for batch operations
+- **Fail fast with actionable errors**: Catch 403/429 errors and return clear message about YouTube restrictions
+- **Document limitations**: Users should understand YouTube support may break unpredictably
+
+**Error handling pattern:**
+```python
+try:
+    ydl.download([url])
+except yt_dlp.utils.DownloadError as e:
+    if '403' in str(e) or 'HTTP Error 403' in str(e):
+        raise ServiceUnavailable(
+            "YouTube blocked the download. This may be temporary rate limiting. "
+            "Try again in a few minutes or update yt-dlp to the latest version."
+        )
+    raise
+```
+
+**Phase:** Phase 1 (Core Integration) — Error handling; Phase 3 (Hardening) — Rate limiting
+
+**Sources:**
+- [yt-dlp Issue #12589: YouTube rate limit to video bitrate](https://github.com/yt-dlp/yt-dlp/issues/12589)
+- [Medium: Scaling YouTube scraping with yt-dlp and proxies](https://medium.com/@datajournal/how-to-use-yt-dlp-to-scrape-youtube-videos-with-proxies-38255a65c20d)
+- [DEV Community: Bypassing 2026 YouTube restrictions](https://dev.to/ali_ibrahim/bypassing-the-2026-youtube-great-wall-a-guide-to-yt-dlp-v2rayng-and-sabr-blocks-1dk8)
+- [VideoHelp Forum: YouTube throttling fixes](https://forum.videohelp.com/threads/406862-YT-throttling-and-how-to-fix-it-(YT-DLP))
+
+---
+
+### P4: yt-dlp Python API Exception Handling Gaps
+
+**Risk:** yt-dlp's Python API raises multiple exception types (`DownloadError`, `ExtractorError`, `PostProcessingError`, network errors) that don't map cleanly to HTTP status codes. Missing a catch can crash the worker thread. Additionally, yt-dlp may write warnings/errors to stdout that don't raise exceptions, requiring custom logger hooks.
+
+**Warning Signs:**
+- Worker crashes on YouTube errors
+- Jobs stuck in PROCESSING state (worker died)
+- No error message in job record despite failure
+- Stdout pollution in logs from yt-dlp warnings
+
+**Prevention:**
+- **Catch all yt-dlp exceptions**: Use broad `except Exception` in worker with specific handlers first
+- **Custom logger hook**: Capture yt-dlp warnings/errors via `logger` parameter in `YoutubeDL` options
+- **Store errors in job record**: Save exception message and type to database for debugging
+- **Watchdog for worker health**: Detect and restart crashed workers (similar to job recovery pattern)
+- **Test failure scenarios**: Malformed URLs, deleted videos, geo-restricted content, network timeouts
+
+**Comprehensive error handling:**
+```python
+from yt_dlp.utils import DownloadError, ExtractorError, PostProcessingError
+
+class YTDLLogger:
+    def debug(self, msg): logger.debug(msg)
+    def warning(self, msg): logger.warning(msg)
+    def error(self, msg): logger.error(msg)
+
+ydl_opts = {
+    'logger': YTDLLogger(),
+    # other options
+}
+
+try:
+    with yt_dlp.YoutubeDL(ydl_opts) as ydl:
+        ydl.download([url])
+except DownloadError as e:
+    # Video unavailable, 403, network error
+    job_repository.fail_job(job_id, f"Download failed: {e}")
+except ExtractorError as e:
+    # URL parsing error, extractor issue
+    job_repository.fail_job(job_id, f"Extraction failed: {e}")
+except PostProcessingError as e:
+    # FFmpeg conversion error
+    job_repository.fail_job(job_id, f"Audio conversion failed: {e}")
+except Exception as e:
+    # Catch-all for unknown errors
+    logger.exception(f"Unexpected error downloading {url}")
+    job_repository.fail_job(job_id, f"Unexpected error: {e}")
+```
+
+**Phase:** Phase 1 (Core Integration) — All error paths must be covered
+
+**Sources:**
+- [Unofficial yt-dlp docs: Using in Python scripts](https://yt-dlp.eknerd.com/docs/embedding%20yt-dlp/using-yt-dlp-in-python-scripts/)
+- [yt-dlp Issue #4262: Error codes discussion](https://github.com/yt-dlp/yt-dlp/issues/4262)
+- [yt-dlp YoutubeDL.py source](https://github.com/yt-dlp/yt-dlp/blob/master/yt_dlp/YoutubeDL.py)
+
+---
+
+### P5: Offline-First Architecture Violation
+
+**Risk:** Cesar's core value is "offline-first" — works anywhere after initial setup. YouTube integration inherently requires internet connectivity, creating UX confusion. If network is down, YouTube jobs fail while file uploads work. Users may assume the entire service is broken.
+
+**Warning Signs:**
+- Network errors on YouTube URLs but not file uploads
+- User confusion about when network is required
+- Jobs failing with "Connection refused" in offline environments
+- Documentation inconsistency about offline capabilities
+
+**Prevention:**
+- **Clear UX distinction**: API and CLI messaging should clarify "YouTube requires internet, local files don't"
+- **Network check before job creation**: Validate connectivity before accepting YouTube jobs (fail fast at submission)
+- **Separate endpoints**: Keep `/transcribe` (file) and `/transcribe/url` (YouTube) separate to reinforce distinction
+- **Health check network status**: Include internet connectivity in `GET /health` response
+- **Document clearly**: README should state "YouTube transcription requires internet; local files work offline"
+
+**Network validation pattern:**
+```python
+def check_internet_connectivity() -> bool:
+    """Quick connectivity check (don't hit YouTube directly)."""
+    try:
+        socket.create_connection(("8.8.8.8", 53), timeout=3)
+        return True
+    except OSError:
+        return False
+
+# Before creating YouTube job
+if is_youtube_url(url) and not check_internet_connectivity():
+    raise ServiceUnavailable(
+        "YouTube transcription requires internet connectivity. "
+        "The service appears to be offline."
+    )
+```
+
+**Phase:** Phase 1 (Core Integration) — Set expectations early
+
+**Sources:**
+- [PROJECT.md constraints](file:///home/buckleyrobinson/projects/cesar/.planning/PROJECT.md) — Offline-first requirement
+- [DEV Community: Offline considerations with network tools](https://dev.to/ali_ibrahim/bypassing-the-2026-youtube-great-wall-a-guide-to-yt-dlp-v2rayng-and-sabr-blocks-1dk8)
+
+---
+
+## Medium Pitfalls
+
+### P6: outtmpl Dictionary Format Confusion
+
+**Risk:** yt-dlp changed `outtmpl` parameter format from simple string (youtube-dl) to dictionary with `['default']` key. Using string directly causes `TypeError: 'string indices must be integers'`. Documentation often shows CLI syntax, not Python API syntax.
+
+**Warning Signs:**
+- TypeError when initializing YoutubeDL
+- Output files going to unexpected locations
+- `prepare_filename()` returns wrong extensions (`.NA` instead of `.mp3`)
+
+**Prevention:**
+- **Use correct format**: `{'outtmpl': {'default': 'path/%(title)s.%(ext)s'}}`
+- **Or use paths parameter**: `{'paths': {'home': '/output/dir'}, 'outtmpl': '%(title)s.%(ext)s'}`
+- **Test output paths**: Verify downloaded files end up in expected location
+- **Use pathlib for path construction**: `str(Path(output_dir) / '%(title)s.%(ext)s')`
+
+**Phase:** Phase 1 (Core Integration) — Gets it right from the start
+
+**Sources:**
+- [yt-dlp Issue #6028: outtmpl incompatibility with youtube-dl](https://github.com/yt-dlp/yt-dlp/issues/6028)
+- [yt-dlp Issue #5517: prepare_filename() wrong extension](https://github.com/yt-dlp/yt-dlp/issues/5517)
+
+---
+
+### P7: Audio Format Selection Complexity
+
+**Risk:** Using `-f bestaudio` doesn't guarantee desired format. YouTube serves Opus/AAC/M4A which may need conversion. Wrong format string can download video+audio (wasting bandwidth) or low-quality audio. FFmpeg postprocessor adds complexity and failure points.
+
+**Warning Signs:**
+- Downloaded files are video+audio (too large)
+- Audio quality lower than expected
+- Unexpected format conversion failures
+- Slow downloads (downloading video when only audio needed)
+
+**Prevention:**
+- **Use explicit audio-only format**: `'format': 'bestaudio/best'` forces audio-only
+- **Specify output format**: `'postprocessors': [{'key': 'FFmpegExtractAudio', 'preferredcodec': 'wav'}]` for consistent input to faster-whisper
+- **Match transcriber expectations**: faster-whisper accepts mp3/wav/m4a — don't force exotic formats
+- **Test format selection**: Verify bandwidth usage is reasonable (audio-only should be ~5-20 MB/min)
+
+**Recommended configuration:**
+```python
+ydl_opts = {
+    'format': 'bestaudio/best',  # Audio-only preference
+    'postprocessors': [{
+        'key': 'FFmpegExtractAudio',
+        'preferredcodec': 'wav',  # faster-whisper expects common formats
+        'preferredquality': '192',
+    }],
+    'outtmpl': {'default': str(output_path)},
+}
+```
+
+**Phase:** Phase 1 (Core Integration) — Avoid wasted bandwidth
+
+**Sources:**
+- [GoProxy Blog: Extract high-quality audio with yt-dlp](https://www.goproxy.com/blog/yt-dlp-audio-only/)
+- [OSTechNix: yt-dlp audio extraction tutorial](https://ostechnix.com/yt-dlp-tutorial/)
+- [yt-dlp Issue #8587: Extracting audio only not working](https://github.com/yt-dlp/yt-dlp/issues/8587)
+
+---
+
+### P8: Progress Reporting Mismatch
+
+**Risk:** yt-dlp progress hooks fire frequently during download (every chunk), creating noise in logs and potential performance issues if writing to database. CLI expects Rich progress bars; API jobs expect status updates. Mixing these models causes UX inconsistency.
+
+**Warning Signs:**
+- Database overwhelmed with progress updates
+- Logs filled with yt-dlp chunk download messages
+- CLI progress bar jumps erratically
+- API job status never shows download phase
+
+**Prevention:**
+- **Throttle progress updates**: Only update job status on significant milestones (0%, 25%, 50%, 75%, 100%)
+- **Separate download and transcription progress**: Track download phase separately from transcription phase
+- **Use progress_hooks wisely**: `'progress_hooks': [hook]` should aggregate before writing to DB
+- **CLI vs API difference**: CLI shows real-time Rich bars; API polls job status — don't force convergence
+
+**Example throttled hook:**
+```python
+last_update = {'percent': 0}
+
+def progress_hook(d):
+    if d['status'] == 'downloading':
+        percent = int(d.get('_percent_str', '0%').strip('%') or 0)
+        # Only update on 10% increments
+        if percent - last_update['percent'] >= 10:
+            job_repository.update_progress(job_id, f"Downloading: {percent}%")
+            last_update['percent'] = percent
+    elif d['status'] == 'finished':
+        job_repository.update_progress(job_id, "Download complete, converting...")
+```
+
+**Phase:** Phase 2 (UX Polish) — Can start simple and improve
+
+**Sources:**
+- [yt-dlp official docs on progress hooks](https://github.com/yt-dlp/yt-dlp)
+- [ARCHITECTURE.md job status patterns](file:///home/buckleyrobinson/projects/cesar/.planning/research/ARCHITECTURE.md)
+
+---
+
+### P9: Dependency Version Pinning vs. Update Frequency
+
+**Risk:** yt-dlp requires frequent updates to keep up with YouTube changes (releases every few weeks). Pinning to exact version breaks when YouTube changes; not pinning risks breaking changes in yt-dlp. Calendar versioning (YYYY.MM.DD) makes "latest" a moving target.
+
+**Warning Signs:**
+- YouTube downloads suddenly fail for all users
+- yt-dlp team closes issues with "update to latest version"
+- Breaking API changes in minor releases
+- Security vulnerabilities in pinned old version
+
+**Prevention:**
+- **Pin with range**: `yt-dlp>=2024.11.0,<2025.0.0` allows patches, blocks major calendar year changes
+- **Monitor yt-dlp releases**: GitHub watch for new releases, review changelogs
+- **Test updates in staging**: Don't auto-update production; validate new versions first
+- **Document update policy**: README should state "yt-dlp may need updates for YouTube compatibility"
+- **Provide update command**: Consider `cesar update-ytdlp` or similar for easy upgrades
+
+**Phase:** Phase 3 (Hardening) — Plan for ongoing maintenance
+
+**Sources:**
+- [DeepWiki: Maintaining yt-dlp updates](https://deepwiki.com/peter279k/yt-dlp-api/5.4-maintaining-yt-dlp-updates)
+- [Linux Mint Forums: yt-dlp update broken](https://forums.linuxmint.com/viewtopic.php?t=370961)
+- [MX Linux Forum: Request for yt-dlp update](https://forum.mxlinux.org/viewtopic.php?t=85628)
+
+---
+
+### P10: Memory Leaks in Long-Running Workers
+
+**Risk:** Python's garbage collector may not free yt-dlp objects in long-running processes. Memory usage grows over time, eventually causing OOM kills. This is especially problematic in the API's background worker thread.
+
+**Warning Signs:**
+- Worker memory usage grows monotonically
+- `gc.garbage` contains yt-dlp objects
+- API server crashes after processing many YouTube jobs
+- System OOM killer terminates process
+
+**Prevention:**
+- **Explicitly clean up**: `ydl = None; gc.collect()` after each job
+- **Use context managers**: `with yt_dlp.YoutubeDL(opts) as ydl:` ensures cleanup
+- **Monitor memory usage**: Log worker RSS memory periodically
+- **Consider worker restart policy**: Restart worker after N jobs (e.g., every 100)
+- **Test long-running scenarios**: Process 50+ YouTube URLs sequentially and monitor memory
+
+**Phase:** Phase 3 (Hardening) — Catches issues in production
+
+**Sources:**
+- [yt-dlp Issue #1949: Memory leaks](https://github.com/yt-dlp/yt-dlp/issues/1949)
+
+---
+
+## Low Pitfalls
+
+### P11: URL Validation Regex Fragility
+
+**Risk:** YouTube URL formats vary (youtube.com, youtu.be, m.youtube.com, with/without www, with tracking params). Regex validation either too strict (rejects valid URLs) or too loose (accepts non-YouTube URLs). yt-dlp handles many formats but validation should match.
+
+**Warning Signs:**
+- Valid YouTube URLs rejected by API
+- Non-YouTube URLs accepted, cause errors later
+- Mobile URLs (youtu.be) treated differently than desktop
+
+**Prevention:**
+- **Delegate to yt-dlp's extractors**: Use `yt_dlp.YoutubeDL().extract_info(url, download=False)` for validation
+- **Or use simple prefix check**: `url.startswith(('https://www.youtube.com', 'https://youtube.com', 'https://youtu.be'))`
+- **Normalize URLs**: yt-dlp handles normalization internally
+- **Test variety of formats**: Include youtu.be, youtube.com/watch?v=, youtube.com/shorts/, etc. in tests
+
+**Phase:** Phase 1 (Core Integration) — Get it right from start
+
+**Sources:**
+- [yt-dlp extractor documentation](https://github.com/yt-dlp/yt-dlp/wiki/Extractors)
+
+---
+
+### P12: IPv6 vs IPv4 Network Issues
+
+**Risk:** Some networks (especially Linux with NetworkManager) default to IPv6, but YouTube may throttle or block IPv6 connections. Downloads stall or timeout. Users blame your app, not network configuration.
+
+**Warning Signs:**
+- Downloads timeout on some networks but not others
+- Linux users report issues, macOS users don't
+- Download starts but never progresses
+
+**Prevention:**
+- **Force IPv4 by default**: `'force_ipv4': True` in yt-dlp options
+- **Make configurable**: Allow users to override if IPv6 works better for them
+- **Document in troubleshooting**: README should mention `--force-ipv4` option
+
+**Phase:** Phase 2 (UX Polish) — Proactive fix for common issue
+
+**Sources:**
+- [yt-dlp Issue #12423: NetworkManager slow downloads](https://github.com/yt-dlp/yt-dlp/issues/12423)
+
+---
+
+### P13: Downloaded File Naming Collisions
+
+**Risk:** YouTube video titles contain special characters (`/`, `:`, `<`, `>`) that break filesystem paths. yt-dlp sanitizes but may truncate long titles. Multiple downloads of same video overwrite each other.
+
+**Warning Signs:**
+- Files saved with cryptic names
+- Download succeeds but file not found
+- Concurrent downloads of same video conflict
+
+**Prevention:**
+- **Use unique temp names**: Generate UUID-based filenames, not title-based
+- **Example**: `'outtmpl': {'default': f'/tmp/cesar-yt-{uuid4()}.%(ext)s'}`
+- **Clean up temp files**: Delete after transcription completes
+- **Don't expose temp filenames to user**: Only show YouTube title in job metadata
+
+**Phase:** Phase 1 (Core Integration) — UUID pattern already used for uploads
+
+**Sources:**
+- [yt-dlp outtmpl documentation](https://github.com/yt-dlp/yt-dlp)
+
+---
+
+### P14: Cache Directory Bloat
+
+**Risk:** yt-dlp caches extractor data in `~/.cache/yt-dlp/` by default. Over time, cache grows without bound. Multiple cesar instances (different users, containers) create separate caches.
+
+**Warning Signs:**
+- `~/.cache/yt-dlp/` grows to hundreds of MB
+- Stale cache causes extractor issues
+- Container images grow unnecessarily
+
+**Prevention:**
+- **Periodic cache cleanup**: `ydl.cache.remove()` or `rm -rf ~/.cache/yt-dlp/*`
+- **Disable cache if not needed**: `'no_cache_dir': True` for ephemeral environments
+- **Document cache location**: Users should know where to clean manually
+
+**Phase:** Phase 3 (Hardening) — Nice to have
+
+**Sources:**
+- [yt-dlp cache documentation](https://manpages.ubuntu.com/manpages/jammy/man1/yt-dlp.1.html)
+- [yt-dlp Issue #5463: Cache cleanup](https://github.com/yt-dlp/yt-dlp/issues/5463)
+
+---
+
+## Phase Assignment Summary
+
+| Phase | Critical | Medium | Low |
+|-------|----------|--------|-----|
+| **Phase 1: Core Integration** | P1, P2, P3, P4, P5 | P6, P7 | P11, P13 |
+| **Phase 2: UX Polish** | — | P8 | P12 |
+| **Phase 3: Hardening** | — | P9, P10 | P14 |
+
+**Phase 1 priorities:** File cleanup, FFmpeg validation, error handling, network checks — all are foundational
+**Phase 2 priorities:** Progress reporting, network configuration — improve UX
+**Phase 3 priorities:** Update strategy, memory leaks, cache management — operational concerns
+
+---
+
+## Testing Recommendations
+
+To validate pitfall mitigations:
+
+1. **P1 (Temp files)**: Kill worker mid-download, verify cleanup
+2. **P2 (FFmpeg)**: Mock missing FFmpeg, verify error message
+3. **P3 (Rate limit)**: Mock 403 response, verify retry/error handling
+4. **P4 (Exceptions)**: Mock each exception type, verify job failure recorded
+5. **P5 (Offline)**: Disconnect network, verify YouTube jobs fail gracefully
+6. **P6 (outtmpl)**: Verify output file location matches expected path
+7. **P7 (Format)**: Check downloaded file size is audio-only (not video)
+8. **P8 (Progress)**: Verify DB not spammed with updates (max 10 updates per job)
+9. **P9 (Version)**: Test with older yt-dlp version, document upgrade path
+10. **P10 (Memory)**: Process 50 URLs sequentially, monitor RSS memory
+11. **P11 (URL)**: Test youtu.be, youtube.com/watch, youtube.com/shorts
+12. **P12 (IPv6)**: Test on IPv6-only network or force IPv6, verify fallback
+13. **P13 (Naming)**: Download video with `/` in title, verify no path errors
+14. **P14 (Cache)**: Check cache size after 100 downloads
+
+---
+
+## Confidence Assessment
+
+| Pitfall Category | Confidence | Rationale |
+|------------------|------------|-----------|
+| Temp file cleanup | HIGH | Multiple GitHub issues confirm ongoing problem |
+| FFmpeg dependency | HIGH | Well-documented requirement, clear error patterns |
+| Rate limiting | MEDIUM | YouTube's measures evolve; current patterns verified |
+| Python API errors | MEDIUM | Exception types documented but not exhaustively tested |
+| Architecture fit | HIGH | Offline-first requirement from PROJECT.md is clear |
+| Format selection | MEDIUM | Multiple sources agree on best practices |
+| Progress reporting | LOW | Inferred from architecture, not yt-dlp-specific docs |
+| Version management | MEDIUM | Community consensus, not official guidance |
+| Memory leaks | MEDIUM | Single GitHub issue, not widespread confirmation |
+| Edge cases (low) | LOW | Common sense, not heavily documented |
+
+---
+
+## Sources
+
+### Official Documentation
+- [yt-dlp GitHub Repository](https://github.com/yt-dlp/yt-dlp)
+- [yt-dlp PyPI Package](https://pypi.org/project/yt-dlp/)
+- [yt-dlp Arch Wiki](https://wiki.archlinux.org/title/Yt-dlp)
+
+### Integration Guides
+- [Unofficial yt-dlp Documentation: Using in Python Scripts](https://yt-dlp.eknerd.com/docs/embedding%20yt-dlp/using-yt-dlp-in-python-scripts/)
+- [Nic's Notes: YT-DLP Library](https://notes.nicolasdeville.com/python/library-yt-dlp/)
+- [Medium: Using yt-dlp to download YouTube transcripts](https://medium.com/@jallenswrx2016/using-yt-dlp-to-download-youtube-transcript-3479fccad9ea)
+
+### Troubleshooting Resources
+- [GoProxy: Extract High-Quality Audio with yt-dlp](https://www.goproxy.com/blog/yt-dlp-audio-only/)
+- [OSTechNix: yt-dlp Tutorial](https://ostechnix.com/yt-dlp-tutorial/)
+- [RapidSeedbox: How to Use yt-dlp Guide](https://www.rapidseedbox.com/blog/yt-dlp-complete-guide)
+- [VideoHelp Forum: YouTube Throttling Fixes](https://forum.videohelp.com/threads/406862-YT-throttling-and-how-to-fix-it-(YT-DLP))
+
+### Community Issues
+- [yt-dlp Issue #11674: Cleanup temp files](https://github.com/yt-dlp/yt-dlp/issues/11674)
+- [yt-dlp Issue #5463: Delete unfinished cache files](https://github.com/yt-dlp/yt-dlp/issues/5463)
+- [yt-dlp Issue #1228: Postprocessing conversion failed](https://github.com/yt-dlp/yt-dlp/issues/1228)
+- [yt-dlp Issue #1949: Memory leaks](https://github.com/yt-dlp/yt-dlp/issues/1949)
+- [yt-dlp Issue #12589: YouTube rate limiting](https://github.com/yt-dlp/yt-dlp/issues/12589)
+
+### Ecosystem Analysis
+- [Medium: Scaling YouTube Scraping with yt-dlp](https://medium.com/@datajournal/how-to-use-yt-dlp-to-scrape-youtube-videos-with-proxies-38255a65c20d)
+- [Medium: Tackling yt-dlp Challenges at AI Scale](https://medium.com/@DataBeacon/how-to-tackle-yt-dlp-challenges-in-ai-scale-scraping-8b78242fedf0)
+- [DEV Community: Bypassing 2026 YouTube Restrictions](https://dev.to/ali_ibrahim/bypassing-the-2026-youtube-great-wall-a-guide-to-yt-dlp-v2rayng-and-sabr-blocks-1dk8)
+
+---
+
+*Researched: 2026-01-31*
+*Researcher: GSD Project Researcher (Pitfalls Dimension)*

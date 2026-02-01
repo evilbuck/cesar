@@ -1,8 +1,10 @@
 """
 Click-based command line interface for audio transcription
 """
+import logging
 import sys
 import time
+from contextlib import contextmanager
 from pathlib import Path
 
 import click
@@ -20,6 +22,18 @@ from rich.progress import (
 
 from cesar.transcriber import AudioTranscriber
 from cesar.utils import format_time, estimate_processing_time
+from cesar.youtube_handler import (
+    is_youtube_url,
+    download_youtube_audio,
+    cleanup_youtube_temp_dir,
+    YouTubeDownloadError,
+    YouTubeURLError,
+    YouTubeUnavailableError,
+    YouTubeRateLimitError,
+    YouTubeAgeRestrictedError,
+    YouTubeNetworkError,
+    FFmpegNotFoundError,
+)
 
 try:
     from importlib.metadata import version
@@ -30,6 +44,27 @@ except Exception:
 
 # Create console for rich output
 console = Console()
+
+# Set up logger
+logger = logging.getLogger(__name__)
+
+
+@contextmanager
+def download_progress(quiet: bool):
+    """Show download progress spinner unless quiet mode."""
+    if quiet:
+        yield
+        return
+
+    with Progress(
+        SpinnerColumn(),
+        TextColumn("[progress.description]{task.description}"),
+        TimeElapsedColumn(),
+        console=console,
+        transient=True,
+    ) as progress:
+        progress.add_task("Downloading YouTube audio...", total=None)
+        yield
 
 
 class ProgressTracker:
@@ -78,14 +113,15 @@ class ProgressTracker:
 @click.version_option(version=__version__, prog_name="cesar")
 def cli():
     """Cesar: Offline audio transcription using faster-whisper"""
-    pass
+    # Clean up orphaned temp files from previous sessions on startup
+    cleanup_youtube_temp_dir()
 
 
 @cli.command(name="transcribe")
 @click.argument(
-    'input_file',
-    type=click.Path(exists=True, readable=True, path_type=Path),
-    metavar='INPUT_FILE'
+    'input_source',
+    type=click.STRING,
+    metavar='INPUT'
 )
 @click.option(
     '-o', '--output',
@@ -149,13 +185,14 @@ def cli():
     type=click.FloatRange(min=0),
     help='End transcription at N seconds'
 )
-def transcribe(input_file, output, model, device, compute_type, batch_size, num_workers, verbose, quiet, max_duration, start_time, end_time):
+def transcribe(input_source, output, model, device, compute_type, batch_size, num_workers, verbose, quiet, max_duration, start_time, end_time):
     """
-    Transcribe audio files to text using faster-whisper (offline)
+    Transcribe audio files or YouTube videos to text using faster-whisper (offline)
 
-    INPUT_FILE: Path to the audio file to transcribe
+    INPUT: Path to audio file or YouTube URL
 
     Supported audio formats: MP3, WAV, M4A, OGG, FLAC, AAC, WMA
+    Supported URLs: YouTube videos (requires FFmpeg)
     """
     # Validate time parameter combinations first, before any operations
     if max_duration and end_time is not None:
@@ -175,10 +212,37 @@ def transcribe(input_file, output, model, device, compute_type, batch_size, num_
         click.echo(error_msg, err=True)
         sys.exit(1)
 
+    # Track temp file for cleanup
+    temp_audio_path = None
+
     try:
         # Set console quiet mode
         if quiet:
             console.quiet = True
+
+        # Handle YouTube URLs vs file paths
+        if input_source.startswith('http://') or input_source.startswith('https://'):
+            # It's a URL
+            if is_youtube_url(input_source):
+                if not quiet:
+                    console.print(f"[blue]Detected YouTube URL[/blue]")
+
+                # Download will be handled with progress display in next section
+                input_file = None  # Will be set after download
+            else:
+                # Non-YouTube URLs not supported in CLI
+                error_msg = "Error: Only YouTube URLs are supported in CLI. For other URLs, use the API."
+                console.print(f"[red]{error_msg}[/red]")
+                click.echo(error_msg, err=True)
+                sys.exit(1)
+        else:
+            # It's a file path - validate exists
+            input_file = Path(input_source)
+            if not input_file.exists():
+                error_msg = f"Error: File not found: {input_source}"
+                console.print(f"[red]{error_msg}[/red]")
+                click.echo(error_msg, err=True)
+                sys.exit(1)
 
         # Create transcriber instance
         transcriber = AudioTranscriber(
@@ -189,8 +253,19 @@ def transcribe(input_file, output, model, device, compute_type, batch_size, num_
             num_workers=num_workers
         )
 
+        # Download YouTube audio if needed
+        if input_file is None:
+            # Must be a YouTube URL
+            with download_progress(quiet):
+                audio_path = download_youtube_audio(input_source)
+
+            temp_audio_path = audio_path  # Mark for cleanup
+            input_file = audio_path
+            if not quiet:
+                console.print(f"[green]Downloaded audio:[/green] {audio_path.name}")
+
         # Validate inputs and get basic info
-        if not quiet:
+        if input_file and not quiet:
             console.print(f"[green]Input file validated:[/green] {input_file}")
 
         # Get audio duration for estimation
@@ -268,6 +343,23 @@ def transcribe(input_file, output, model, device, compute_type, batch_size, num_
 
         return 0
 
+    except FFmpegNotFoundError as e:
+        error_msg = str(e)
+        console.print(f"[red]Error:[/red] {error_msg}")
+        click.echo(f"Error: {error_msg}", err=True)
+        sys.exit(1)
+    except YouTubeDownloadError as e:
+        error_msg = str(e)
+        console.print(f"[red]YouTube Error:[/red] {error_msg}")
+        click.echo(f"YouTube Error: {error_msg}", err=True)
+
+        # Show cleaned underlying cause in verbose mode
+        if verbose and e.__cause__:
+            cause = str(e.__cause__).split('\n')[0]  # First line only
+            console.print(f"[dim]  Cause: {cause}[/dim]")
+            click.echo(f"  Cause: {cause}", err=True)
+
+        sys.exit(1)
     except FileNotFoundError as e:
         error_msg = f"Error: {e}"
         console.print(f"[red]{error_msg}[/red]")
@@ -310,6 +402,14 @@ def transcribe(input_file, output, model, device, compute_type, batch_size, num_
             console.print(f"[dim]{trace}[/dim]")
             click.echo(trace, err=True)
         return 1
+    finally:
+        # Clean up temporary YouTube download if it exists
+        if temp_audio_path and temp_audio_path.exists():
+            try:
+                temp_audio_path.unlink()
+                logger.debug(f"Cleaned up temporary audio file: {temp_audio_path}")
+            except Exception:
+                pass  # Best effort cleanup
 
 
 @cli.command(name="serve")

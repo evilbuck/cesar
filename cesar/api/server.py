@@ -10,8 +10,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi import Path as PathParam
+from fastapi.responses import JSONResponse
 
 from pydantic import BaseModel
 
@@ -19,6 +20,7 @@ from cesar.api.file_handler import download_from_url, save_upload_file
 from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
+from cesar.youtube_handler import YouTubeDownloadError, check_ffmpeg_available, is_youtube_url
 
 logger = logging.getLogger(__name__)
 
@@ -86,16 +88,33 @@ app = FastAPI(
 )
 
 
+@app.exception_handler(YouTubeDownloadError)
+async def youtube_error_handler(request: Request, exc: YouTubeDownloadError):
+    """Handle YouTube errors with structured JSON response.
+
+    Returns error_type and message for programmatic error handling.
+    Uses http_status from exception class attributes.
+    """
+    return JSONResponse(
+        status_code=getattr(exc, 'http_status', 400),
+        content={
+            "error_type": getattr(exc, 'error_type', 'youtube_error'),
+            "message": str(exc),
+        }
+    )
+
+
 @app.get("/health")
 async def health():
     """Health check endpoint.
 
-    Returns server health status and worker state.
+    Returns server health status, worker state, and YouTube capability.
 
     Returns:
-        dict: Health status with "status" and "worker" keys
+        dict: Health status with:
             - status: "healthy" when server is operational
             - worker: "running" if worker task is active, "stopped" if done
+            - youtube: object with ffmpeg_available and message
     """
     worker_task = getattr(app.state, "worker_task", None)
 
@@ -106,9 +125,16 @@ async def health():
     else:
         worker_status = "running"
 
+    # Check YouTube capability (FFmpeg availability)
+    ffmpeg_available, ffmpeg_message = check_ffmpeg_available()
+
     return {
         "status": "healthy",
         "worker": worker_status,
+        "youtube": {
+            "available": ffmpeg_available,
+            "message": ffmpeg_message if not ffmpeg_available else "YouTube transcription supported",
+        },
     }
 
 
@@ -199,19 +225,33 @@ async def transcribe_from_url(request: TranscribeURLRequest):
     """Download audio from URL and transcribe.
 
     Accepts a JSON body with URL and optional model parameter.
-    The file is downloaded to a temporary location and a job is created for processing.
+
+    For YouTube URLs: Creates job with DOWNLOADING status and lets worker handle download.
+    For regular URLs: Downloads first, then creates job with QUEUED status.
 
     Args:
         request: Request body with url and optional model
 
     Returns:
-        Job: Created job with queued status
+        Job: Created job with downloading status (YouTube) or queued status (regular URL)
 
     Raises:
         HTTPException: 408 if URL download times out
         HTTPException: 400 if download fails or invalid file type
     """
-    tmp_path = await download_from_url(request.url)
-    job = Job(audio_path=tmp_path, model_size=request.model)
-    await app.state.repo.create(job)
-    return job
+    if is_youtube_url(request.url):
+        # YouTube: Create job with DOWNLOADING status, let worker handle download
+        job = Job(
+            audio_path=request.url,  # Store URL, not file path
+            model_size=request.model,
+            status=JobStatus.DOWNLOADING,
+            download_progress=0,
+        )
+        await app.state.repo.create(job)
+        return job
+    else:
+        # Regular URL: Download first, then queue
+        tmp_path = await download_from_url(request.url)
+        job = Job(audio_path=tmp_path, model_size=request.model)
+        await app.state.repo.create(job)
+        return job

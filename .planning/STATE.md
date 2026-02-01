@@ -2,29 +2,34 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-24)
+See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
 **Current focus:** Planning next milestone
 
 ## Current Position
 
-Milestone: v2.0 API complete
-Phase: Ready for next milestone
+Phase: (none — between milestones)
 Plan: Not started
-Status: v2.0 shipped, ready for /gsd:new-milestone
-Last activity: 2026-01-24 — v2.1 cancelled (architecture already unified)
+Status: Ready for `/gsd:new-milestone`
+Last activity: 2026-02-01 — v2.1 YouTube Transcription shipped
 
-Progress: [██████████] 100% (v2.0: shipped)
+Progress: v2.1 complete, next milestone not yet defined
 
 ## Performance Metrics
 
-**v1.0 (shipped 2026-01-23):**
-- 1 phase, 3 plans, 9 min total
+**Velocity:**
+- Total plans completed: 20 (v1.0: 3, v2.0: 7, v2.1: 7 + 3 prior milestones)
+- v2.1 average: ~3 min/plan
+- Total execution time: ~22 min for v2.1
 
-**v2.0 (shipped 2026-01-23):**
-- 4 phases, 7 plans, 18 min total
-- Average: 1.8 min/plan
+**By Milestone:**
+
+| Milestone | Phases | Plans | Duration |
+|-----------|--------|-------|----------|
+| v1.0 Package & CLI | 1 | 3 | 1 day |
+| v2.0 API | 4 | 7 | 1 day |
+| v2.1 YouTube | 3 | 7 | 2 days |
 
 ## Accumulated Context
 
@@ -34,10 +39,7 @@ See PROJECT.md Key Decisions table for full history.
 
 ### Findings
 
-**2026-01-24:** Investigated CLI refactor for v2.1. Found architecture is already unified:
-- CLI (`cli.py:247`) and API (`worker.py:183`) both call `AudioTranscriber.transcribe_file()`
-- No code duplication in core transcription logic
-- Only difference is option exposure (CLI has more options than API)
+Summarized in PROJECT.md Current State.
 
 ### Pending Todos
 
@@ -45,20 +47,19 @@ None.
 
 ### Blockers/Concerns
 
-None.
+None — milestone shipped successfully.
 
 ## Session Continuity
 
-Last session: 2026-01-24
-Stopped at: v2.1 cancelled, back to v2.0 complete state
+Last session: 2026-02-01
+Stopped at: v2.1 milestone complete
 Resume file: None
+Next step: `/gsd:new-milestone` to start v2.2 planning
 
 ## Milestone History
 
 - **v1.0 Package & CLI** — Shipped 2026-01-23 (1 phase, 3 plans)
 - **v2.0 API** — Shipped 2026-01-23 (4 phases, 7 plans)
+- **v2.1 YouTube Transcription** — Shipped 2026-02-01 (3 phases, 7 plans)
 
 See `.planning/MILESTONES.md` for full details.
-
----
-*Next: `/gsd:new-milestone` to start planning v2.1 features (webhooks, model param, language param) or different scope*

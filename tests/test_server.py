@@ -81,6 +81,32 @@ class TestHealthEndpoint(unittest.TestCase):
         data = response.json()
         self.assertIn(data["worker"], ["running", "stopped"])
 
+    @patch('cesar.api.server.check_ffmpeg_available')
+    def test_health_reports_youtube_available(self, mock_ffmpeg):
+        """Test health endpoint reports YouTube available when FFmpeg present."""
+        mock_ffmpeg.return_value = (True, "")
+
+        response = self.client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("youtube", data)
+        self.assertTrue(data["youtube"]["available"])
+        self.assertIn("supported", data["youtube"]["message"].lower())
+
+    @patch('cesar.api.server.check_ffmpeg_available')
+    def test_health_reports_youtube_unavailable(self, mock_ffmpeg):
+        """Test health endpoint reports YouTube unavailable when FFmpeg missing."""
+        mock_ffmpeg.return_value = (False, "FFmpeg not found")
+
+        response = self.client.get("/health")
+
+        self.assertEqual(response.status_code, 200)
+        data = response.json()
+        self.assertIn("youtube", data)
+        self.assertFalse(data["youtube"]["available"])
+        self.assertIn("FFmpeg", data["youtube"]["message"])
+
     def test_openapi_docs_available(self):
         """GET /docs should return 200 (Swagger UI)."""
         response = self.client.get("/docs")
@@ -678,6 +704,110 @@ class TestTranscribeURL(unittest.TestCase):
         self.assertIn("audio_path", data)
         self.assertIn("model_size", data)
         self.assertIn("created_at", data)
+
+    def test_transcribe_url_youtube_creates_downloading_status(self):
+        """POST /transcribe/url with YouTube URL returns job with status=DOWNLOADING."""
+        response = self.client.post(
+            "/transcribe/url",
+            json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertEqual(data["status"], "downloading")
+        self.assertEqual(data["download_progress"], 0)
+        self.assertEqual(data["audio_path"], "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        # Verify repo.create was called
+        self.mock_repo.create.assert_called_once()
+
+    @patch("cesar.api.file_handler.httpx.AsyncClient")
+    def test_transcribe_url_regular_creates_queued_status(self, mock_httpx_client):
+        """POST /transcribe/url with regular URL returns job with status=QUEUED."""
+        # Mock successful HTTP response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"fake audio content"
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client_instance = MagicMock()
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_client_instance.get = AsyncMock(return_value=mock_response)
+
+        mock_httpx_client.return_value = mock_client_instance
+
+        response = self.client.post(
+            "/transcribe/url",
+            json={"url": "http://example.com/audio.mp3"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertEqual(data["status"], "queued")
+        self.assertIsNone(data["download_progress"])
+
+
+class TestYouTubeExceptionHandler(unittest.TestCase):
+    """Tests for YouTube exception handler."""
+
+    def test_exception_handler_returns_error_type(self):
+        """Verify exception handler returns structured error response."""
+        from cesar.youtube_handler import YouTubeRateLimitError
+        from cesar.api.server import youtube_error_handler
+        import asyncio
+
+        exc = YouTubeRateLimitError("Test rate limit message")
+        mock_request = MagicMock()
+
+        response = asyncio.run(youtube_error_handler(mock_request, exc))
+
+        self.assertEqual(response.status_code, 429)
+        import json
+        body = json.loads(response.body)
+        self.assertEqual(body['error_type'], 'rate_limited')
+        self.assertIn('Test rate limit message', body['message'])
+
+    def test_exception_handler_uses_http_status(self):
+        """Verify handler uses http_status from exception."""
+        from cesar.youtube_handler import YouTubeNetworkError
+        from cesar.api.server import youtube_error_handler
+        import asyncio
+
+        exc = YouTubeNetworkError("Network timeout")
+        mock_request = MagicMock()
+        response = asyncio.run(youtube_error_handler(mock_request, exc))
+
+        self.assertEqual(response.status_code, 502)
+
+    def test_exception_handler_base_error(self):
+        """Verify handler works with base YouTubeDownloadError."""
+        from cesar.youtube_handler import YouTubeDownloadError
+        from cesar.api.server import youtube_error_handler
+        import asyncio
+
+        exc = YouTubeDownloadError("Generic error")
+        mock_request = MagicMock()
+        response = asyncio.run(youtube_error_handler(mock_request, exc))
+
+        self.assertEqual(response.status_code, 400)
+        import json
+        body = json.loads(response.body)
+        self.assertEqual(body['error_type'], 'youtube_error')
+
+    def test_exception_handler_unavailable_error(self):
+        """Verify handler returns 404 for unavailable video."""
+        from cesar.youtube_handler import YouTubeUnavailableError
+        from cesar.api.server import youtube_error_handler
+        import asyncio
+
+        exc = YouTubeUnavailableError("Video not found")
+        mock_request = MagicMock()
+        response = asyncio.run(youtube_error_handler(mock_request, exc))
+
+        self.assertEqual(response.status_code, 404)
+        import json
+        body = json.loads(response.body)
+        self.assertEqual(body['error_type'], 'video_unavailable')
 
 
 if __name__ == "__main__":

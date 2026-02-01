@@ -14,6 +14,11 @@ from typing import Dict, Optional
 from cesar.api.models import JobStatus
 from cesar.api.repository import JobRepository
 from cesar.transcriber import AudioTranscriber
+from cesar.youtube_handler import (
+    download_youtube_audio,
+    YouTubeDownloadError,
+    FFmpegNotFoundError,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -110,6 +115,7 @@ class BackgroundWorker:
     async def _process_job(self, job) -> None:
         """Process a single transcription job.
 
+        Handles YouTube downloads for DOWNLOADING status jobs, then runs transcription.
         Updates job status to PROCESSING, runs transcription in thread pool,
         and updates job with results or error message.
 
@@ -120,10 +126,35 @@ class BackgroundWorker:
         logger.info(f"Processing job {job.id}: {job.audio_path}")
 
         try:
-            # Update to PROCESSING status
-            job.status = JobStatus.PROCESSING
-            job.started_at = datetime.utcnow()
-            await self.repository.update(job)
+            # Handle YouTube download phase
+            if job.status == JobStatus.DOWNLOADING:
+                # Update progress to 0 (starting download)
+                job.download_progress = 0
+                job.started_at = datetime.utcnow()
+                await self.repository.update(job)
+
+                # Download YouTube audio (blocking, run in thread pool)
+                try:
+                    audio_path = await asyncio.to_thread(
+                        download_youtube_audio,
+                        job.audio_path  # Contains the URL
+                    )
+                    # Update progress to 100 (download complete)
+                    job.download_progress = 100
+                    job.audio_path = str(audio_path)  # Replace URL with file path
+                    job.status = JobStatus.PROCESSING
+                    await self.repository.update(job)
+                except (YouTubeDownloadError, FFmpegNotFoundError) as e:
+                    job.status = JobStatus.ERROR
+                    job.completed_at = datetime.utcnow()
+                    job.error_message = str(e)
+                    await self.repository.update(job)
+                    return
+            else:
+                # Regular job - update to PROCESSING
+                job.status = JobStatus.PROCESSING
+                job.started_at = datetime.utcnow()
+                await self.repository.update(job)
 
             # Run transcription in thread pool (blocking operation)
             result = await asyncio.to_thread(

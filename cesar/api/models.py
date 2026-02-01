@@ -15,10 +15,12 @@ from pydantic import BaseModel, ConfigDict, Field, field_validator
 class JobStatus(str, Enum):
     """Job lifecycle states.
 
-    Flow: queued -> processing -> completed | error
+    Flow: queued -> downloading -> processing -> completed | error
+    Note: downloading only applies to YouTube URLs
     """
 
     QUEUED = "queued"
+    DOWNLOADING = "downloading"  # New: YouTube audio extraction
     PROCESSING = "processing"
     COMPLETED = "completed"
     ERROR = "error"
@@ -67,6 +69,14 @@ class Job(BaseModel):
 
     # Error (populated on failure)
     error_message: Optional[str] = None
+
+    # Download progress (for YouTube jobs)
+    download_progress: Optional[int] = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description="Download progress percentage (0-100) for YouTube jobs. None for non-YouTube jobs."
+    )
 
     @field_validator("model_size")
     @classmethod
