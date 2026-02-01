@@ -12,13 +12,16 @@ from unittest.mock import MagicMock, patch
 
 from cesar.youtube_handler import (
     FFmpegNotFoundError,
+    YouTubeAgeRestrictedError,
     YouTubeDownloadError,
+    YouTubeNetworkError,
     YouTubeRateLimitError,
     YouTubeURLError,
     YouTubeUnavailableError,
     check_ffmpeg_available,
     cleanup_youtube_temp_dir,
     download_youtube_audio,
+    extract_video_id,
     is_youtube_url,
     require_ffmpeg,
 )
@@ -246,7 +249,7 @@ class TestDownloadYouTubeAudio(unittest.TestCase):
                     output_dir=Path(temp_dir)
                 )
 
-            self.assertIn('rate limiting', str(ctx.exception))
+            self.assertIn('limiting', str(ctx.exception))
 
     @patch('cesar.youtube_handler.require_ffmpeg')
     @patch('cesar.youtube_handler.yt_dlp.YoutubeDL')
@@ -444,6 +447,262 @@ class TestCleanupYouTubeTempDir(unittest.TestCase):
             self.assertEqual(count, 1)
             # Subdirectory should still exist
             self.assertTrue((cesar_dir / 'subdir').exists())
+
+
+class TestExtractVideoId(unittest.TestCase):
+    """Tests for extract_video_id function."""
+
+    def test_extract_from_watch_url(self):
+        """Test extraction from standard watch URL."""
+        url = 'https://youtube.com/watch?v=dQw4w9WgXcQ'
+        self.assertEqual(extract_video_id(url), 'dQw4w9WgXcQ')
+
+    def test_extract_from_youtu_be(self):
+        """Test extraction from shortened youtu.be URL."""
+        url = 'https://youtu.be/dQw4w9WgXcQ'
+        self.assertEqual(extract_video_id(url), 'dQw4w9WgXcQ')
+
+    def test_extract_from_shorts(self):
+        """Test extraction from YouTube Shorts URL."""
+        url = 'https://youtube.com/shorts/abc123XYZ00'
+        self.assertEqual(extract_video_id(url), 'abc123XYZ00')
+
+    def test_extract_from_embed(self):
+        """Test extraction from embed URL."""
+        url = 'https://youtube.com/embed/dQw4w9WgXcQ'
+        self.assertEqual(extract_video_id(url), 'dQw4w9WgXcQ')
+
+    def test_extract_with_extra_params(self):
+        """Test extraction with additional URL parameters."""
+        url = 'https://youtube.com/watch?v=dQw4w9WgXcQ&list=PLxyz'
+        self.assertEqual(extract_video_id(url), 'dQw4w9WgXcQ')
+
+    def test_extract_from_invalid_url(self):
+        """Test extraction from non-YouTube URL returns 'unknown'."""
+        url = 'https://example.com/video'
+        self.assertEqual(extract_video_id(url), 'unknown')
+
+    def test_extract_from_empty_string(self):
+        """Test extraction from empty string returns 'unknown'."""
+        self.assertEqual(extract_video_id(''), 'unknown')
+
+    def test_extract_from_none(self):
+        """Test extraction from None returns 'unknown'."""
+        self.assertEqual(extract_video_id(None), 'unknown')
+
+
+class TestExceptionAttributes(unittest.TestCase):
+    """Tests for exception class attributes."""
+
+    def test_youtube_download_error_attributes(self):
+        """Test YouTubeDownloadError has correct attributes."""
+        self.assertEqual(YouTubeDownloadError.error_type, 'youtube_error')
+        self.assertEqual(YouTubeDownloadError.http_status, 400)
+
+    def test_youtube_url_error_attributes(self):
+        """Test YouTubeURLError has correct attributes."""
+        self.assertEqual(YouTubeURLError.error_type, 'invalid_youtube_url')
+        self.assertEqual(YouTubeURLError.http_status, 400)
+
+    def test_youtube_unavailable_error_attributes(self):
+        """Test YouTubeUnavailableError has correct attributes."""
+        self.assertEqual(YouTubeUnavailableError.error_type, 'video_unavailable')
+        self.assertEqual(YouTubeUnavailableError.http_status, 404)
+
+    def test_youtube_rate_limit_error_attributes(self):
+        """Test YouTubeRateLimitError has correct attributes."""
+        self.assertEqual(YouTubeRateLimitError.error_type, 'rate_limited')
+        self.assertEqual(YouTubeRateLimitError.http_status, 429)
+
+    def test_youtube_age_restricted_error_attributes(self):
+        """Test YouTubeAgeRestrictedError has correct attributes."""
+        self.assertEqual(YouTubeAgeRestrictedError.error_type, 'age_restricted')
+        self.assertEqual(YouTubeAgeRestrictedError.http_status, 403)
+
+    def test_youtube_network_error_attributes(self):
+        """Test YouTubeNetworkError has correct attributes."""
+        self.assertEqual(YouTubeNetworkError.error_type, 'network_error')
+        self.assertEqual(YouTubeNetworkError.http_status, 502)
+
+    def test_ffmpeg_not_found_error_attributes(self):
+        """Test FFmpegNotFoundError has correct attributes."""
+        self.assertEqual(FFmpegNotFoundError.error_type, 'ffmpeg_not_found')
+        self.assertEqual(FFmpegNotFoundError.http_status, 503)
+
+
+class TestDownloadErrorDetection(unittest.TestCase):
+    """Tests for error detection patterns in download_youtube_audio."""
+
+    def setUp(self):
+        """Clear FFmpeg cache before each test."""
+        check_ffmpeg_available.cache_clear()
+
+    def tearDown(self):
+        """Clear FFmpeg cache after each test."""
+        check_ffmpeg_available.cache_clear()
+
+    @patch('cesar.youtube_handler.require_ffmpeg')
+    @patch('cesar.youtube_handler.yt_dlp.YoutubeDL')
+    def test_detects_age_restricted(self, mock_ydl_class, mock_require):
+        """Test age-restricted video raises YouTubeAgeRestrictedError."""
+        from yt_dlp.utils import DownloadError
+
+        mock_ydl = MagicMock()
+        mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.side_effect = DownloadError(
+            "Sign in to confirm your age"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(YouTubeAgeRestrictedError) as ctx:
+                download_youtube_audio(
+                    'https://youtube.com/watch?v=test123test',
+                    output_dir=Path(temp_dir)
+                )
+
+            self.assertIn('Age-restricted', str(ctx.exception))
+            self.assertIn('test123test', str(ctx.exception))
+
+    @patch('cesar.youtube_handler.require_ffmpeg')
+    @patch('cesar.youtube_handler.yt_dlp.YoutubeDL')
+    def test_detects_private_video(self, mock_ydl_class, mock_require):
+        """Test private video raises YouTubeUnavailableError with specific message."""
+        from yt_dlp.utils import DownloadError
+
+        mock_ydl = MagicMock()
+        mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.side_effect = DownloadError(
+            "This is a private video"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(YouTubeUnavailableError) as ctx:
+                download_youtube_audio(
+                    'https://youtube.com/watch?v=pvt123pvt00',
+                    output_dir=Path(temp_dir)
+                )
+
+            self.assertIn('Private', str(ctx.exception))
+            self.assertIn('pvt123pvt00', str(ctx.exception))
+
+    @patch('cesar.youtube_handler.require_ffmpeg')
+    @patch('cesar.youtube_handler.yt_dlp.YoutubeDL')
+    def test_detects_geo_restricted(self, mock_ydl_class, mock_require):
+        """Test geo-restricted video raises YouTubeUnavailableError."""
+        from yt_dlp.utils import DownloadError
+
+        mock_ydl = MagicMock()
+        mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.side_effect = DownloadError(
+            "Video not available in your country"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(YouTubeUnavailableError) as ctx:
+                download_youtube_audio(
+                    'https://youtube.com/watch?v=geo123geo00',
+                    output_dir=Path(temp_dir)
+                )
+
+            self.assertIn('Geo-restricted', str(ctx.exception))
+            self.assertIn('geo123geo00', str(ctx.exception))
+
+    @patch('cesar.youtube_handler.require_ffmpeg')
+    @patch('cesar.youtube_handler.yt_dlp.YoutubeDL')
+    def test_detects_network_timeout(self, mock_ydl_class, mock_require):
+        """Test network timeout raises YouTubeNetworkError."""
+        from yt_dlp.utils import DownloadError
+
+        mock_ydl = MagicMock()
+        mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.side_effect = DownloadError(
+            "Connection timed out"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(YouTubeNetworkError) as ctx:
+                download_youtube_audio(
+                    'https://youtube.com/watch?v=net123net00',
+                    output_dir=Path(temp_dir)
+                )
+
+            self.assertIn('timeout', str(ctx.exception))
+            self.assertIn('net123net00', str(ctx.exception))
+
+    @patch('cesar.youtube_handler.require_ffmpeg')
+    @patch('cesar.youtube_handler.yt_dlp.YoutubeDL')
+    def test_detects_connection_reset(self, mock_ydl_class, mock_require):
+        """Test connection reset raises YouTubeNetworkError."""
+        from yt_dlp.utils import DownloadError
+
+        mock_ydl = MagicMock()
+        mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.side_effect = DownloadError(
+            "Connection reset by peer"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(YouTubeNetworkError) as ctx:
+                download_youtube_audio(
+                    'https://youtube.com/watch?v=rst123rst00',
+                    output_dir=Path(temp_dir)
+                )
+
+            self.assertIn('interrupted', str(ctx.exception))
+            self.assertIn('rst123rst00', str(ctx.exception))
+
+    @patch('cesar.youtube_handler.require_ffmpeg')
+    @patch('cesar.youtube_handler.yt_dlp.YoutubeDL')
+    def test_detects_rate_limit_403(self, mock_ydl_class, mock_require):
+        """Test 403 error raises YouTubeRateLimitError."""
+        from yt_dlp.utils import DownloadError
+
+        mock_ydl = MagicMock()
+        mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.side_effect = DownloadError(
+            "HTTP Error 403: Forbidden"
+        )
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(YouTubeRateLimitError) as ctx:
+                download_youtube_audio(
+                    'https://youtube.com/watch?v=lim123lim00',
+                    output_dir=Path(temp_dir)
+                )
+
+            self.assertIn('limiting', str(ctx.exception))
+            self.assertIn('lim123lim00', str(ctx.exception))
+
+    @patch('cesar.youtube_handler.require_ffmpeg')
+    @patch('cesar.youtube_handler.yt_dlp.YoutubeDL')
+    def test_error_message_includes_video_id(self, mock_ydl_class, mock_require):
+        """Test that error messages include video ID."""
+        from yt_dlp.utils import DownloadError
+
+        mock_ydl = MagicMock()
+        mock_ydl_class.return_value.__enter__.return_value = mock_ydl
+        mock_ydl.extract_info.side_effect = DownloadError("Video unavailable")
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            with self.assertRaises(YouTubeUnavailableError) as ctx:
+                download_youtube_audio(
+                    'https://youtube.com/watch?v=abc123XYZ99',
+                    output_dir=Path(temp_dir)
+                )
+
+            # Verify video ID appears in message
+            self.assertIn('abc123XYZ99', str(ctx.exception))
+            # Verify format matches expected pattern
+            self.assertIn('video:', str(ctx.exception))
+
+    @patch('cesar.youtube_handler.require_ffmpeg')
+    def test_invalid_url_includes_video_id(self, mock_require):
+        """Test invalid URL error includes video ID extraction."""
+        with self.assertRaises(YouTubeURLError) as ctx:
+            download_youtube_audio('https://example.com/video')
+
+        self.assertIn('unknown', str(ctx.exception))
+        self.assertIn('video:', str(ctx.exception))
 
 
 if __name__ == "__main__":

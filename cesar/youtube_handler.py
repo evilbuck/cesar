@@ -221,8 +221,8 @@ def download_youtube_audio(url: str, output_dir: Optional[Path] = None) -> Path:
                 "This video requires sign-in to verify age."
             ) from e
 
-        # Private video
-        if 'private video' in error_str:
+        # Private video (check both "private video" and "is private")
+        if 'private video' in error_str or 'is private' in error_str:
             raise YouTubeUnavailableError(
                 f"Private video (video: {video_id}). "
                 "This video is private and cannot be accessed."
