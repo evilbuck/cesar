@@ -115,7 +115,8 @@ class JobRepository:
     async def update(self, job: Job) -> Job:
         """Update existing job.
 
-        Updates all mutable fields: status, timestamps, results, error.
+        Updates all mutable fields: status, timestamps, results, error, audio_path, download_progress.
+        Note: audio_path is updated to support YouTube download flow (URL -> downloaded file path).
 
         Args:
             job: Job model instance with updated values
@@ -126,13 +127,14 @@ class JobRepository:
         await self._connection.execute(
             """
             UPDATE jobs SET
-                status = ?, started_at = ?, completed_at = ?,
+                status = ?, audio_path = ?, started_at = ?, completed_at = ?,
                 result_text = ?, detected_language = ?, error_message = ?,
                 download_progress = ?
             WHERE id = ?
             """,
             (
                 job.status.value,
+                job.audio_path,
                 job.started_at.isoformat() if job.started_at else None,
                 job.completed_at.isoformat() if job.completed_at else None,
                 job.result_text,
