@@ -75,10 +75,10 @@ Which phases cover which requirements. Updated during roadmap creation.
 | CONF-05 | Phase 9 | Complete |
 | CONF-06 | Phase 9 | Complete |
 | CONF-07 | Phase 9 | Complete |
-| DIAR-09 | Phase 10 | Pending |
-| DIAR-10 | Phase 10 | Pending |
-| DIAR-11 | Phase 10 | Pending |
-| DIAR-12 | Phase 10 | Pending |
+| DIAR-09 | Phase 10 | Complete |
+| DIAR-10 | Phase 10 | Complete |
+| DIAR-11 | Phase 10 | Complete |
+| DIAR-12 | Phase 10 | Complete |
 | DIAR-03 | Phase 11 | Pending |
 | DIAR-04 | Phase 11 | Pending |
 | DIAR-05 | Phase 11 | Pending |
