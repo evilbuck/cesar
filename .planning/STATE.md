@@ -33,12 +33,13 @@ Progress: [████████░░] 65% (13/20 total plans complete)
 | 4. REST API | 2 | - | - |
 | 5. Server Command | 2 | - | - |
 | 6. Core YouTube Module | 1 | 3min | 3min |
-| 7. Interface Integration | 1/2 | 3min | 3min |
+| 7. Interface Integration | 2/2 | 6min | 3min |
 
 **Recent Trend:**
 - Phase 6 Plan 01: 3 minutes
 - Phase 7 Plan 01: 3 minutes 22 seconds
-- Trend: Stable, efficient execution
+- Phase 7 Plan 02: 3 minutes 6 seconds
+- Trend: Stable, efficient execution (~3 min/plan)
 
 *Metrics will be updated as v2.1 progresses*
 
@@ -56,9 +57,12 @@ Recent decisions affecting current work:
 - v2.1 Phase 6: Use m4a format for YouTube audio extraction - smaller than wav, compatible with faster-whisper
 - v2.1 Phase 6: UUID-based temp filenames - avoid collisions in concurrent downloads
 - v2.1 Phase 6: lru_cache on FFmpeg check - fast repeated validation during server lifetime
-- v2.1 Phase 7: CLI YouTube-only URL support - API better suited for arbitrary URLs
-- v2.1 Phase 7: Indeterminate spinner for downloads - simpler than progress hooks, sufficient UX
-- v2.1 Phase 7: Temp file cleanup in finally block - ensures cleanup even on error
+- v2.1 Phase 7-01: CLI YouTube-only URL support - API better suited for arbitrary URLs
+- v2.1 Phase 7-01: Indeterminate spinner for downloads - simpler than progress hooks, sufficient UX
+- v2.1 Phase 7-01: Temp file cleanup in finally block - ensures cleanup even on error
+- v2.1 Phase 7-02: download_progress field (0-100) - basic progress indication without real-time hooks
+- v2.1 Phase 7-02: DOWNLOADING status for YouTube jobs - separate download from transcription phase
+- v2.1 Phase 7-02: Health endpoint reports FFmpeg availability - enable client capability checking
 
 ### Findings
 
@@ -82,6 +86,13 @@ Recent decisions affecting current work:
 - 4 new unit tests cover all YouTube code paths in CLI
 - Temp file cleanup ensures no disk bloat
 
+**2026-02-01:** Phase 7 Plan 02 complete:
+- API /transcribe/url now accepts YouTube URLs
+- DOWNLOADING status and download_progress field (0-100) added to Job model
+- Health endpoint reports FFmpeg availability and YouTube support
+- 10 new unit tests cover YouTube API integration and download_progress validation
+- All 171 project tests pass
+
 ### Pending Todos
 
 None yet.
@@ -94,20 +105,24 @@ None yet.
 
 **Phase 7 considerations:**
 - ✅ CLI YouTube URL support complete (07-01)
-- Worker needs modification to detect YouTube URLs and call download_youtube_audio()
-- API /transcribe/url endpoint needs YouTube URL handling
+- ✅ API YouTube URL support complete (07-02)
+
+**Phase 8 considerations:**
+- Worker needs modification to handle YouTube URLs (detect and download)
+- Worker needs to update job.download_progress during YouTube downloads
+- Integration testing needed with real YouTube URLs
 
 ## Session Continuity
 
-Last session: 2026-01-31 23:59:48 UTC
-Stopped at: Completed 07-01-PLAN.md
+Last session: 2026-02-01 00:00:58 UTC
+Stopped at: Completed 07-02-PLAN.md
 Resume file: None
-Next step: Execute 07-02-PLAN.md (API YouTube integration)
+Next step: Create Phase 8 plan for worker YouTube integration
 
 ## Milestone History
 
 - **v1.0 Package & CLI** — Shipped 2026-01-23 (1 phase, 3 plans)
 - **v2.0 API** — Shipped 2026-01-23 (4 phases, 7 plans)
-- **v2.1 YouTube Integration** — In progress (Phase 6 complete, 2 phases remaining)
+- **v2.1 YouTube Integration** — In progress (Phases 6-7 complete, 1 phase remaining)
 
 See `.planning/MILESTONES.md` for full details.
