@@ -2,7 +2,7 @@
 
 ## What This Is
 
-An offline audio transcription tool with CLI and HTTP API interfaces. Install via `pipx install .` for the CLI (`cesar transcribe`) or run `cesar serve` to start the API server with OpenAPI docs. Works completely offline after initial model download.
+An offline audio transcription tool with CLI and HTTP API interfaces that supports YouTube video transcription. Install via `pipx install .` for the CLI (`cesar transcribe`) or run `cesar serve` to start the API server with OpenAPI docs. Accepts local files, URLs, or YouTube links. Works completely offline after initial model download.
 
 ## Core Value
 
@@ -10,23 +10,26 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 
 ## Current State
 
-**Shipped:** v2.0 API (2026-01-23)
+**Shipped:** v2.1 YouTube Transcription (2026-02-01)
+- YouTube URL transcription via CLI and API
+- Download progress tracking with DOWNLOADING status
+- Granular error handling for YouTube-specific failures
+- 38 new files, 211 tests passing
+
+**Previous:** v2.0 API (2026-01-23)
 - HTTP API with async job queue via `cesar serve`
 - 6 REST endpoints: health, jobs list/get, transcribe (file upload + URL)
 - SQLite persistence with job recovery on crash
-- ~1,929 LOC Python, 124 tests passing
 
-**Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn
+**Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn, yt-dlp
 
-## Current Milestone: v2.1 YouTube Transcription
+## Next Milestone Goals
 
-**Goal:** Transcribe YouTube videos directly by URL — no manual download step required.
-
-**Target features:**
-- `cesar transcribe <youtube-url>` downloads audio and transcribes
-- `POST /transcribe/url` accepts YouTube URLs (alongside regular audio URLs)
-- yt-dlp bundled as Python dependency (no external tool setup)
-- YouTube only for now (other platforms deferred)
+Candidates for v2.2:
+- Output formats: SRT/VTT with timestamps
+- Batch processing: Multiple URLs in single command
+- Audio quality selection: Choose YouTube audio quality
+- Model selection API: Specify model per request
 
 ## Requirements
 
@@ -56,14 +59,19 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 - ✓ `cesar serve` command with --port option — v2.0
 - ✓ `cesar serve --help` shows server options — v2.0
 - ✓ Job recovery on crash (re-queue orphaned jobs) — v2.0
+- ✓ CLI accepts YouTube URLs for transcription — v2.1
+- ✓ API accepts YouTube URLs via POST /transcribe/url — v2.1
+- ✓ yt-dlp bundled as Python dependency — v2.1
+- ✓ Audio extracted from YouTube video before transcription — v2.1
+- ✓ Progress feedback during download (DOWNLOADING status, spinner) — v2.1
+- ✓ YouTube error handling (private, age-restricted, geo-blocked, rate-limited) — v2.1
+- ✓ FFmpeg validation with helpful error messages — v2.1
+- ✓ Health endpoint reports YouTube capability — v2.1
+- ✓ YouTube documentation in README — v2.1
 
 ### Active
 
-- [ ] CLI accepts YouTube URLs for transcription
-- [ ] API accepts YouTube URLs via POST /transcribe/url
-- [ ] yt-dlp bundled as Python dependency
-- [ ] Audio extracted from YouTube video before transcription
-- [ ] Progress feedback during download
+(None — planning next milestone)
 
 ### Out of Scope
 
@@ -75,9 +83,12 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 - `cesar config` command — add later if needed
 - CI/CD install validation — manual testing sufficient
 - Windows support — focus on Mac/Linux first
-- Webhook callbacks — deferred to v2.1
-- Model selection parameter for API — deferred to v2.1
-- Language specification parameter — deferred to v2.1
+- Webhook callbacks — deferred to future milestone
+- Model selection parameter for API — deferred to v2.2+
+- Language specification parameter — deferred to v2.2+
+- Non-YouTube platforms (Vimeo, etc.) — YouTube only for now
+- Playlist auto-expansion — unclear user intent, complexity
+- Live stream transcription — requires streaming architecture
 
 ## Constraints
 
@@ -107,6 +118,14 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 | Separate file/URL endpoints | Different content types need different handling | ✓ Good |
 | Job recovery on startup | Re-queue orphaned jobs from crashes | ✓ Good |
 | Import string for uvicorn | Required for reload support | ✓ Good |
+| yt-dlp for YouTube downloads | Only viable option, youtube-dl unmaintained | ✓ Good |
+| m4a format for YouTube audio | Smaller than wav, compatible with faster-whisper | ✓ Good |
+| UUID-based temp filenames | Collision-free concurrent downloads | ✓ Good |
+| DOWNLOADING status for YouTube jobs | Separate download from transcription phase | ✓ Good |
+| download_progress field (0-100) | Basic progress without complex real-time hooks | ✓ Good |
+| Health endpoint reports FFmpeg | Enable client capability checking | ✓ Good |
+| Class-level error_type on exceptions | Enables API structured error responses | ✓ Good |
+| Video ID in error messages | Identification without URL clutter | ✓ Good |
 
 ---
-*Last updated: 2026-01-31 after milestone v2.1 YouTube Transcription started*
+*Last updated: 2026-02-01 after v2.1 YouTube Transcription milestone*

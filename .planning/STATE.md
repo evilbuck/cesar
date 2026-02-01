@@ -2,176 +2,64 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-01-31)
+See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Phase 8 - Error Handling & Documentation
+**Current focus:** Planning next milestone
 
 ## Current Position
 
-Phase: 8 of 8 (Error Handling & Documentation)
-Plan: 3 of 3 in current phase
-Status: Phase complete
-Last activity: 2026-02-01 — Completed 08-03-PLAN.md
+Phase: (none — between milestones)
+Plan: Not started
+Status: Ready for `/gsd:new-milestone`
+Last activity: 2026-02-01 — v2.1 YouTube Transcription shipped
 
-Progress: [██████████] 100% (20/20 total plans complete)
+Progress: v2.1 complete, next milestone not yet defined
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 11 (from v1.0 + v2.0 + v2.1-phase6)
-- Average duration: Unknown (metrics from v1.0 and v2.0 not tracked)
-- Total execution time: ~2 days (v1.0 + v2.0 combined)
+- Total plans completed: 20 (v1.0: 3, v2.0: 7, v2.1: 7 + 3 prior milestones)
+- v2.1 average: ~3 min/plan
+- Total execution time: ~22 min for v2.1
 
-**By Phase:**
+**By Milestone:**
 
-| Phase | Plans | Total | Avg/Plan |
-|-------|-------|-------|----------|
-| 1. Package & CLI | 3 | - | - |
-| 2. Database Foundation | 2 | - | - |
-| 3. Background Worker | 1 | - | - |
-| 4. REST API | 2 | - | - |
-| 5. Server Command | 2 | - | - |
-| 6. Core YouTube Module | 1 | 3min | 3min |
-| 7. Interface Integration | 3/3 | 11min | 3.7min |
-| 8. Error Handling & Docs | 3/3 | 8min | 2.7min |
-
-**Recent Trend:**
-- Phase 6 Plan 01: 3 minutes
-- Phase 7 Plan 01: 3 minutes 22 seconds
-- Phase 7 Plan 02: 3 minutes 6 seconds
-- Phase 7 Plan 03: 5 minutes 7 seconds
-- Phase 8 Plan 01: 3 minutes
-- Phase 8 Plan 02: 2 minutes 15 seconds
-- Phase 8 Plan 03: 3 minutes
-- Trend: Consistent ~2-5 min/plan
-
-*Metrics will be updated as v2.1 progresses*
+| Milestone | Phases | Plans | Duration |
+|-----------|--------|-------|----------|
+| v1.0 Package & CLI | 1 | 3 | 1 day |
+| v2.0 API | 4 | 7 | 1 day |
+| v2.1 YouTube | 3 | 7 | 2 days |
 
 ## Accumulated Context
 
 ### Decisions
 
-Decisions are logged in PROJECT.md Key Decisions table.
-Recent decisions affecting current work:
-
-- v2.0: Separate file/URL endpoints - Different content types need different handling
-- v2.0: FastAPI for HTTP API - Modern, async, automatic OpenAPI docs
-- v2.0: SQLite for job persistence - No external dependencies, fits offline-first
-- v2.1: Use yt-dlp for YouTube downloads - Only viable option, youtube-dl unmaintained
-- v2.1 Phase 6: Use m4a format for YouTube audio extraction - smaller than wav, compatible with faster-whisper
-- v2.1 Phase 6: UUID-based temp filenames - avoid collisions in concurrent downloads
-- v2.1 Phase 6: lru_cache on FFmpeg check - fast repeated validation during server lifetime
-- v2.1 Phase 7-01: CLI YouTube-only URL support - API better suited for arbitrary URLs
-- v2.1 Phase 7-01: Indeterminate spinner for downloads - simpler than progress hooks, sufficient UX
-- v2.1 Phase 7-01: Temp file cleanup in finally block - ensures cleanup even on error
-- v2.1 Phase 7-02: download_progress field (0-100) - basic progress indication without real-time hooks
-- v2.1 Phase 7-02: DOWNLOADING status for YouTube jobs - separate download from transcription phase
-- v2.1 Phase 7-02: Health endpoint reports FFmpeg availability - enable client capability checking
-- v2.1 Phase 7-03: Repository update() includes audio_path - required for YouTube URL->file path replacement
-- v2.1 Phase 7-03: Worker uses asyncio.to_thread for YouTube download - avoid blocking event loop
-- v2.1 Phase 7-03: get_next_queued() returns DOWNLOADING jobs - ensures worker picks up YouTube jobs
-- v2.1 Phase 8-01: Class-level error_type and http_status on exceptions - enables API structured error responses
-- v2.1 Phase 8-01: Video ID in error messages (not full URL) - identification without clutter
-- v2.1 Phase 8-01: Retry suggestions only for network errors - actionable when user can actually do something
-- v2.1 Phase 8-02: API errors return error_type field for programmatic handling
-- v2.1 Phase 8-02: CLI shows first line of __cause__ only in verbose mode (not full stack trace)
-- v2.1 Phase 8-03: Quick start example at top of YouTube section, detailed examples follow
-- v2.1 Phase 8-03: No troubleshooting section - error messages are self-explanatory
+See PROJECT.md Key Decisions table for full history.
 
 ### Findings
 
-**2026-01-24:** Architecture is already unified:
-- CLI and API both call AudioTranscriber.transcribe_file()
-- No code duplication in core transcription logic
-
-**2026-01-31:** Phase 6 research complete:
-- yt-dlp Python API well-documented with YoutubeDL context manager
-- FFmpeg validation via shutil.which() - standard pattern
-- Temp file cleanup requires explicit handling (yt-dlp limitation)
-
-**2026-01-31:** Phase 6 execution complete:
-- youtube_handler.py provides complete YouTube download capability
-- 33 unit tests covering all code paths
-- yt-dlp>=2024.1.0 dependency added
-
-**2026-01-31:** Phase 7 Plan 01 complete:
-- CLI now accepts YouTube URLs via `cesar transcribe <url> -o output.txt`
-- Download progress spinner displays during audio extraction
-- 4 new unit tests cover all YouTube code paths in CLI
-- Temp file cleanup ensures no disk bloat
-
-**2026-02-01:** Phase 7 Plan 02 complete:
-- API /transcribe/url now accepts YouTube URLs
-- DOWNLOADING status and download_progress field (0-100) added to Job model
-- Health endpoint reports FFmpeg availability and YouTube support
-- 10 new unit tests cover YouTube API integration and download_progress validation
-- All 171 project tests pass
-
-**2026-01-31:** Phase 7 Plan 03 complete:
-- Worker handles DOWNLOADING jobs and downloads YouTube audio
-- download_progress updates from 0 to 100 during download phase
-- Status transitions: DOWNLOADING -> PROCESSING -> COMPLETED
-- Repository update() now includes audio_path for YouTube URL replacement
-- 9 new unit tests for YouTube worker integration
-- All 180 project tests pass
-
-**2026-02-01:** Phase 8 Plan 01 complete:
-- Extended exception hierarchy with error_type/http_status class attributes
-- Added YouTubeAgeRestrictedError (403) and YouTubeNetworkError (502)
-- Added extract_video_id() for YouTube URL video ID extraction
-- Enhanced error detection: age-restricted, private, geo-restricted, network, rate-limited
-- Error messages follow "Brief technical (video: {id}). Plain explanation." format
-- 23 new unit tests for error handling
-- All 203 project tests pass
-
-**2026-02-01:** Phase 8 Plan 02 complete:
-- FastAPI exception handler returns JSON with error_type and message fields
-- HTTP status codes match exception types (400/403/404/429/502)
-- CLI displays "[red]YouTube Error:[/red]" prefix with Rich formatting
-- Verbose mode shows first line of __cause__ for debugging
-- 8 new unit tests for API and CLI error handling
-- All 211 project tests pass
-
-**2026-02-01:** Phase 8 Plan 03 complete:
-- README.md updated with comprehensive YouTube Transcription section
-- CLI and API usage examples with supported URL formats documented
-- FFmpeg and yt-dlp dependency requirements documented
-- Features, System Requirements, Installation sections updated with YouTube mentions
-- Health endpoint YouTube capability check documented
-- Limitations section covers YouTube-only, public videos, rate limiting
+Summarized in PROJECT.md Current State.
 
 ### Pending Todos
 
-None yet.
+None.
 
 ### Blockers/Concerns
 
-**Resolved (Phase 6):**
-- FFmpeg validation implemented with helpful error messages
-- yt-dlp version compatibility addressed (>=2024.1.0)
-
-**Phase 7 considerations:**
-- ✅ CLI YouTube URL support complete (07-01)
-- ✅ API YouTube URL support complete (07-02)
-- ✅ Worker YouTube download handling complete (07-03)
-
-**Phase 8 considerations:**
-- ✅ Enhanced error handling complete (08-01)
-- ✅ API/CLI error response formatting complete (08-02)
-- ✅ README YouTube documentation complete (08-03)
+None — milestone shipped successfully.
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 08-03-PLAN.md (Phase 8 complete)
+Stopped at: v2.1 milestone complete
 Resume file: None
-Next step: v2.1 YouTube Integration milestone complete - ready for release
+Next step: `/gsd:new-milestone` to start v2.2 planning
 
 ## Milestone History
 
 - **v1.0 Package & CLI** — Shipped 2026-01-23 (1 phase, 3 plans)
 - **v2.0 API** — Shipped 2026-01-23 (4 phases, 7 plans)
-- **v2.1 YouTube Integration** — Complete 2026-02-01 (3 phases, 7 plans)
+- **v2.1 YouTube Transcription** — Shipped 2026-02-01 (3 phases, 7 plans)
 
 See `.planning/MILESTONES.md` for full details.

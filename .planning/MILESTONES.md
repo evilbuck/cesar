@@ -1,5 +1,34 @@
 # Project Milestones: Cesar
 
+## v2.1 YouTube Transcription (Shipped: 2026-02-01)
+
+**Delivered:** Direct YouTube video transcription via URL — no manual audio download required.
+
+**Phases completed:** 6-8 (7 plans total)
+
+**Key accomplishments:**
+
+- Created youtube_handler.py module with yt-dlp for YouTube audio extraction
+- CLI accepts YouTube URLs: `cesar transcribe <youtube-url> -o output.txt`
+- API accepts YouTube URLs via /transcribe/url with job status tracking
+- DOWNLOADING status and download_progress field (0-100) for YouTube jobs
+- Comprehensive error handling with granular exception types (age-restricted, private, geo-blocked, network, rate-limited)
+- Complete documentation in README.md with CLI/API examples and FFmpeg requirements
+
+**Stats:**
+
+- 38 files created/modified
+- +5,849 lines added, -87 removed
+- 3 phases, 7 plans
+- 2 days from start to ship (2026-01-31 → 2026-02-01)
+- 211 total tests (87 added in v2.1)
+
+**Git range:** `d1a127e` (feat(06-01)) → `e6cac93` (docs(08))
+
+**What's next:** v2.2 output formats (SRT/VTT), batch processing, or audio quality selection
+
+---
+
 ## v2.0 API (Shipped: 2026-01-23)
 
 **Delivered:** HTTP API layer with async job queue for programmatic transcription access via `cesar serve`.
