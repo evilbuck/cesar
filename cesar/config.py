@@ -103,7 +103,7 @@ def load_config(config_path: Path) -> CesarConfig:
             config_data = tomllib.load(f)
     except tomllib.TOMLDecodeError as e:
         raise ConfigError(
-            f"Invalid TOML syntax in {config_path} at line {e.lineno}, column {e.colno}: {e.msg}"
+            f"Invalid TOML syntax in {config_path}: {str(e)}"
         ) from e
 
     # Validate with Pydantic
