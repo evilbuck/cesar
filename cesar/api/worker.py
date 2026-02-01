@@ -6,6 +6,7 @@ and processes them sequentially using AudioTranscriber.
 """
 import asyncio
 import logging
+import os
 import tempfile
 from datetime import datetime
 from pathlib import Path
@@ -13,6 +14,9 @@ from typing import Dict, Optional
 
 from cesar.api.models import JobStatus
 from cesar.api.repository import JobRepository
+from cesar.config import CesarConfig
+from cesar.diarization import SpeakerDiarizer, DiarizationError, AuthenticationError
+from cesar.orchestrator import TranscriptionOrchestrator
 from cesar.transcriber import AudioTranscriber
 from cesar.youtube_handler import (
     download_youtube_audio,
@@ -42,15 +46,22 @@ class BackgroundWorker:
         await worker.shutdown()
     """
 
-    def __init__(self, repository: JobRepository, poll_interval: float = 1.0):
+    def __init__(
+        self,
+        repository: JobRepository,
+        poll_interval: float = 1.0,
+        config: Optional[CesarConfig] = None
+    ):
         """Initialize worker with repository and poll interval.
 
         Args:
             repository: JobRepository instance for job persistence
             poll_interval: Seconds to wait between polls when no jobs available
+            config: Optional CesarConfig for HF token resolution
         """
         self.repository = repository
         self.poll_interval = poll_interval
+        self.config = config
         self._shutdown_event = asyncio.Event()
         self._current_job_id: Optional[str] = None
 
@@ -71,6 +82,55 @@ class BackgroundWorker:
             Job ID if processing, None otherwise
         """
         return self._current_job_id
+
+    def _get_hf_token(self) -> Optional[str]:
+        """Resolve HuggingFace token from config, env, or cache.
+
+        Resolution order:
+        1. self.config.hf_token if config provided
+        2. HF_TOKEN environment variable
+        3. ~/.cache/huggingface/token file
+
+        Returns:
+            HF token or None if not found
+        """
+        # Check config first
+        if self.config and self.config.hf_token:
+            return self.config.hf_token
+
+        # Try environment variable
+        env_token = os.getenv('HF_TOKEN')
+        if env_token:
+            return env_token
+
+        # Try cached token
+        token_path = Path.home() / '.cache' / 'huggingface' / 'token'
+        if token_path.exists():
+            return token_path.read_text().strip()
+
+        return None
+
+    def _update_progress(
+        self,
+        job,
+        phase: str,
+        overall_pct: int,
+        phase_pct: int
+    ) -> None:
+        """Update job progress tracking fields.
+
+        Args:
+            job: Job instance to update
+            phase: Current processing phase (downloading, transcribing, diarizing, formatting)
+            overall_pct: Overall progress percentage (0-100)
+            phase_pct: Current phase progress percentage (0-100)
+
+        Note:
+            Actual DB update happens at status transitions, not on every progress update.
+        """
+        job.progress = int(overall_pct)
+        job.progress_phase = phase
+        job.progress_phase_pct = int(phase_pct)
 
     async def run(self) -> None:
         """Run the worker loop until shutdown is requested.
@@ -206,7 +266,6 @@ class BackgroundWorker:
 
         try:
             # Close the file descriptor (AudioTranscriber will open the file itself)
-            import os
             os.close(fd)
 
             # Create transcriber and run transcription
