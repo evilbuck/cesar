@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call — no cloud services, no API keys, no ongoing costs
-**Current focus:** Phase 10 - Speaker Diarization Core
+**Current focus:** Phase 11 - Orchestration & Formatting
 
 ## Current Position
 
-Phase: 10 of 13 (Speaker Diarization Core)
-Plan: Complete (2/2)
-Status: Phase verified
-Last activity: 2026-02-01 — Phase 10 execution complete
+Phase: 11 of 13 (Orchestration & Formatting)
+Plan: 1 of 2 (in progress)
+Status: In progress
+Last activity: 2026-02-01 — Completed 11-01-PLAN.md
 
-Progress: [█████████░░░░░░░░░░░] 50% (21 of 42 total plans complete)
+Progress: [█████████░░░░░░░░░░░] 52% (22 of 42 total plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 21
-- Average duration: ~2.7 min/plan (v2.1-v2.3)
-- Total execution time: ~35 min total
+- Total plans completed: 22
+- Average duration: ~2.6 min/plan (v2.1-v2.4)
+- Total execution time: ~37 min total
 
 **By Phase:**
 
@@ -37,10 +37,11 @@ Progress: [█████████░░░░░░░░░░░] 50% (21
 | 8. Error Handling & Documentation | 2 | - | - |
 | 9. Configuration System | 2 | 5min | 2.5min |
 | 10. Speaker Diarization Core | 2 | 8min | 4min |
+| 11. Orchestration & Formatting | 1 | 2min | 2min |
 
 **Recent Trend:**
-- Last 3 plans: 3min (09-02), 5min (10-01), 3min (10-02)
-- Trend: Fast execution for core algorithms
+- Last 3 plans: 5min (10-01), 3min (10-02), 2min (11-01)
+- Trend: Very fast execution for formatting logic
 
 *Updated after each plan completion*
 
@@ -68,6 +69,10 @@ Recent decisions affecting current work:
 - v2.3: Segment splitting at speaker changes (proportional text distribution by time)
 - v2.3: Overlapping speech threshold 500ms (mark as "Multiple speakers")
 - v2.3: Decisecond timestamp precision (MM:SS.d format for readability)
+- v2.4: Default minimum segment duration 0.5s (filters diarization artifacts)
+- v2.4: Speaker label format "Speaker N" (human-friendly vs SPEAKER_XX)
+- v2.4: Markdown section headers for speakers (### Speaker N)
+- v2.4: Timestamps on separate line below speaker headers
 
 ### Pending Todos
 
@@ -80,6 +85,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Phase 10 complete and verified
+Stopped at: Completed 11-01-PLAN.md
 Resume file: None
-Next step: `/gsd:discuss-phase 11`
+Next step: `/gsd:execute-phase 11 02`
