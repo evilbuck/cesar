@@ -4,7 +4,7 @@
 
 - ✅ **v1.0 Package & CLI** - Phases 1 (shipped 2026-01-23)
 - ✅ **v2.0 API** - Phases 2-5 (shipped 2026-01-23)
-- 🚧 **v2.1 YouTube Transcription** - Phases 6-8 (in progress)
+- ✅ **v2.1 YouTube Transcription** - Phases 6-8 (shipped 2026-02-01)
 
 ## Phases
 
@@ -58,7 +58,8 @@ Plans:
 
 </details>
 
-### 🚧 v2.1 YouTube Transcription (In Progress)
+<details>
+<summary>✅ v2.1 YouTube Transcription (Phases 6-8) - SHIPPED 2026-02-01</summary>
 
 **Milestone Goal:** Transcribe YouTube videos directly by URL without manual download
 
@@ -107,9 +108,11 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 08-01-PLAN.md — Enhanced YouTube error types and detection patterns
-- [ ] 08-02-PLAN.md — CLI and API error response formatting
-- [ ] 08-03-PLAN.md — YouTube documentation in README
+- [x] 08-01-PLAN.md — Enhanced YouTube error types and detection patterns
+- [x] 08-02-PLAN.md — CLI and API error response formatting
+- [x] 08-03-PLAN.md — YouTube documentation in README
+
+</details>
 
 ## Progress
 
@@ -125,4 +128,4 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 5. Server Command | v2.0 | 2/2 | Complete | 2026-01-23 |
 | 6. Core YouTube Module | v2.1 | 1/1 | Complete | 2026-01-31 |
 | 7. Interface Integration | v2.1 | 3/3 | Complete | 2026-01-31 |
-| 8. Error Handling & Docs | v2.1 | 0/3 | Not started | - |
+| 8. Error Handling & Docs | v2.1 | 3/3 | Complete | 2026-02-01 |
