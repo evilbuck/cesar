@@ -10,8 +10,9 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, Form, HTTPException, UploadFile, status
+from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi import Path as PathParam
+from fastapi.responses import JSONResponse
 
 from pydantic import BaseModel
 
@@ -19,7 +20,7 @@ from cesar.api.file_handler import download_from_url, save_upload_file
 from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
-from cesar.youtube_handler import check_ffmpeg_available, is_youtube_url
+from cesar.youtube_handler import YouTubeDownloadError, check_ffmpeg_available, is_youtube_url
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,22 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+
+@app.exception_handler(YouTubeDownloadError)
+async def youtube_error_handler(request: Request, exc: YouTubeDownloadError):
+    """Handle YouTube errors with structured JSON response.
+
+    Returns error_type and message for programmatic error handling.
+    Uses http_status from exception class attributes.
+    """
+    return JSONResponse(
+        status_code=getattr(exc, 'http_status', 400),
+        content={
+            "error_type": getattr(exc, 'error_type', 'youtube_error'),
+            "message": str(exc),
+        }
+    )
 
 
 @app.get("/health")
