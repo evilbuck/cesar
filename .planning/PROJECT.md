@@ -23,13 +23,16 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 
 **Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn, yt-dlp
 
-## Next Milestone Goals
+## Current Milestone: v2.2 Speaker Identification
 
-Candidates for v2.2:
-- Output formats: SRT/VTT with timestamps
-- Batch processing: Multiple URLs in single command
-- Audio quality selection: Choose YouTube audio quality
-- Model selection API: Specify model per request
+**Goal:** Add speaker diarization to transcripts with configurable defaults
+
+**Target features:**
+- Speaker identification (diarization) for audio transcripts
+- Markdown output format with inline speaker labels
+- Configuration system for CLI and API defaults
+- Works across all input sources (files, URLs, YouTube)
+- Offline-first with downloadable models
 
 ## Requirements
 
@@ -71,7 +74,13 @@ Candidates for v2.2:
 
 ### Active
 
-(None — planning next milestone)
+- [ ] Speaker identification (diarization) in transcripts
+- [ ] Markdown output with speaker labels and timestamps
+- [ ] CLI configuration file support (~/.config/cesar/config.toml)
+- [ ] API local configuration file support
+- [ ] Configurable default for speaker identification
+- [ ] Speaker ID works with all input sources (files, URLs, YouTube)
+- [ ] Offline speaker identification models
 
 ### Out of Scope
 
@@ -80,7 +89,7 @@ Candidates for v2.2:
 - Authentication/API keys — internal service, not needed
 - Rate limiting — internal service, not needed
 - `cesar models` command — add later if needed
-- `cesar config` command — add later if needed
+- `cesar config` command — using config files instead
 - CI/CD install validation — manual testing sufficient
 - Windows support — focus on Mac/Linux first
 - Webhook callbacks — deferred to future milestone
@@ -128,4 +137,4 @@ Candidates for v2.2:
 | Video ID in error messages | Identification without URL clutter | ✓ Good |
 
 ---
-*Last updated: 2026-02-01 after v2.1 YouTube Transcription milestone*
+*Last updated: 2026-02-01 after starting v2.2 Speaker Identification milestone*

@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Planning next milestone
+**Current focus:** v2.2 Speaker Identification
 
 ## Current Position
 
-Phase: (none — between milestones)
-Plan: Not started
-Status: Ready for `/gsd:new-milestone`
-Last activity: 2026-02-01 — v2.1 YouTube Transcription shipped
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-01 — Milestone v2.2 Speaker Identification started
 
-Progress: v2.1 complete, next milestone not yet defined
+Progress: Milestone initialized, proceeding to requirements
 
 ## Performance Metrics
 
