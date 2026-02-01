@@ -113,7 +113,8 @@ class ProgressTracker:
 @click.version_option(version=__version__, prog_name="cesar")
 def cli():
     """Cesar: Offline audio transcription using faster-whisper"""
-    pass
+    # Clean up orphaned temp files from previous sessions on startup
+    cleanup_youtube_temp_dir()
 
 
 @cli.command(name="transcribe")
