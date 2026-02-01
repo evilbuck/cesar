@@ -10,11 +10,11 @@ See: .planning/PROJECT.md (updated 2026-01-31)
 ## Current Position
 
 Phase: 8 of 8 (Error Handling & Documentation)
-Plan: 1 of 3 in current phase
+Plan: 2 of 3 in current phase
 Status: In progress
-Last activity: 2026-02-01 — Completed 08-01-PLAN.md
+Last activity: 2026-02-01 — Completed 08-02-PLAN.md
 
-Progress: [████████░░] 75% (15/20 total plans complete)
+Progress: [████████░░] 80% (16/20 total plans complete)
 
 ## Performance Metrics
 
@@ -34,7 +34,7 @@ Progress: [████████░░] 75% (15/20 total plans complete)
 | 5. Server Command | 2 | - | - |
 | 6. Core YouTube Module | 1 | 3min | 3min |
 | 7. Interface Integration | 3/3 | 11min | 3.7min |
-| 8. Error Handling & Docs | 1/3 | 3min | 3min |
+| 8. Error Handling & Docs | 2/3 | 5min | 2.5min |
 
 **Recent Trend:**
 - Phase 6 Plan 01: 3 minutes
@@ -42,7 +42,8 @@ Progress: [████████░░] 75% (15/20 total plans complete)
 - Phase 7 Plan 02: 3 minutes 6 seconds
 - Phase 7 Plan 03: 5 minutes 7 seconds
 - Phase 8 Plan 01: 3 minutes
-- Trend: Consistent ~3-5 min/plan
+- Phase 8 Plan 02: 2 minutes 15 seconds
+- Trend: Consistent ~2-5 min/plan
 
 *Metrics will be updated as v2.1 progresses*
 
@@ -72,6 +73,8 @@ Recent decisions affecting current work:
 - v2.1 Phase 8-01: Class-level error_type and http_status on exceptions - enables API structured error responses
 - v2.1 Phase 8-01: Video ID in error messages (not full URL) - identification without clutter
 - v2.1 Phase 8-01: Retry suggestions only for network errors - actionable when user can actually do something
+- v2.1 Phase 8-02: API errors return error_type field for programmatic handling
+- v2.1 Phase 8-02: CLI shows first line of __cause__ only in verbose mode (not full stack trace)
 
 ### Findings
 
@@ -119,6 +122,14 @@ Recent decisions affecting current work:
 - 23 new unit tests for error handling
 - All 203 project tests pass
 
+**2026-02-01:** Phase 8 Plan 02 complete:
+- FastAPI exception handler returns JSON with error_type and message fields
+- HTTP status codes match exception types (400/403/404/429/502)
+- CLI displays "[red]YouTube Error:[/red]" prefix with Rich formatting
+- Verbose mode shows first line of __cause__ for debugging
+- 8 new unit tests for API and CLI error handling
+- All 211 project tests pass
+
 ### Pending Todos
 
 None yet.
@@ -136,15 +147,15 @@ None yet.
 
 **Phase 8 considerations:**
 - ✅ Enhanced error handling complete (08-01)
-- API error response formatting pending (08-02)
+- ✅ API/CLI error response formatting complete (08-02)
 - Documentation with YouTube examples pending (08-03)
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 08-01-PLAN.md
+Stopped at: Completed 08-02-PLAN.md
 Resume file: None
-Next step: Continue with 08-02-PLAN.md for API error formatting
+Next step: Continue with 08-03-PLAN.md for documentation with YouTube examples
 
 ## Milestone History
 
