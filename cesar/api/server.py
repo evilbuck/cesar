@@ -19,7 +19,7 @@ from cesar.api.file_handler import download_from_url, save_upload_file
 from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
-from cesar.youtube_handler import check_ffmpeg_available
+from cesar.youtube_handler import check_ffmpeg_available, is_youtube_url
 
 logger = logging.getLogger(__name__)
 
@@ -208,19 +208,33 @@ async def transcribe_from_url(request: TranscribeURLRequest):
     """Download audio from URL and transcribe.
 
     Accepts a JSON body with URL and optional model parameter.
-    The file is downloaded to a temporary location and a job is created for processing.
+
+    For YouTube URLs: Creates job with DOWNLOADING status and lets worker handle download.
+    For regular URLs: Downloads first, then creates job with QUEUED status.
 
     Args:
         request: Request body with url and optional model
 
     Returns:
-        Job: Created job with queued status
+        Job: Created job with downloading status (YouTube) or queued status (regular URL)
 
     Raises:
         HTTPException: 408 if URL download times out
         HTTPException: 400 if download fails or invalid file type
     """
-    tmp_path = await download_from_url(request.url)
-    job = Job(audio_path=tmp_path, model_size=request.model)
-    await app.state.repo.create(job)
-    return job
+    if is_youtube_url(request.url):
+        # YouTube: Create job with DOWNLOADING status, let worker handle download
+        job = Job(
+            audio_path=request.url,  # Store URL, not file path
+            model_size=request.model,
+            status=JobStatus.DOWNLOADING,
+            download_progress=0,
+        )
+        await app.state.repo.create(job)
+        return job
+    else:
+        # Regular URL: Download first, then queue
+        tmp_path = await download_from_url(request.url)
+        job = Job(audio_path=tmp_path, model_size=request.model)
+        await app.state.repo.create(job)
+        return job

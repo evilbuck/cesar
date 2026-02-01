@@ -705,6 +705,47 @@ class TestTranscribeURL(unittest.TestCase):
         self.assertIn("model_size", data)
         self.assertIn("created_at", data)
 
+    def test_transcribe_url_youtube_creates_downloading_status(self):
+        """POST /transcribe/url with YouTube URL returns job with status=DOWNLOADING."""
+        response = self.client.post(
+            "/transcribe/url",
+            json={"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertEqual(data["status"], "downloading")
+        self.assertEqual(data["download_progress"], 0)
+        self.assertEqual(data["audio_path"], "https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+        # Verify repo.create was called
+        self.mock_repo.create.assert_called_once()
+
+    @patch("cesar.api.file_handler.httpx.AsyncClient")
+    def test_transcribe_url_regular_creates_queued_status(self, mock_httpx_client):
+        """POST /transcribe/url with regular URL returns job with status=QUEUED."""
+        # Mock successful HTTP response
+        mock_response = MagicMock()
+        mock_response.status_code = 200
+        mock_response.content = b"fake audio content"
+        mock_response.raise_for_status = MagicMock()
+
+        mock_client_instance = MagicMock()
+        mock_client_instance.__aenter__ = AsyncMock(return_value=mock_client_instance)
+        mock_client_instance.__aexit__ = AsyncMock(return_value=None)
+        mock_client_instance.get = AsyncMock(return_value=mock_response)
+
+        mock_httpx_client.return_value = mock_client_instance
+
+        response = self.client.post(
+            "/transcribe/url",
+            json={"url": "http://example.com/audio.mp3"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertEqual(data["status"], "queued")
+        self.assertIsNone(data["download_progress"])
+
 
 if __name__ == "__main__":
     unittest.main()
