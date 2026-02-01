@@ -27,6 +27,11 @@ from cesar.youtube_handler import (
     download_youtube_audio,
     cleanup_youtube_temp_dir,
     YouTubeDownloadError,
+    YouTubeURLError,
+    YouTubeUnavailableError,
+    YouTubeRateLimitError,
+    YouTubeAgeRestrictedError,
+    YouTubeNetworkError,
     FFmpegNotFoundError,
 )
 
@@ -338,14 +343,21 @@ def transcribe(input_source, output, model, device, compute_type, batch_size, nu
         return 0
 
     except FFmpegNotFoundError as e:
-        error_msg = f"Error: {e}"
-        console.print(f"[red]{error_msg}[/red]")
-        click.echo(error_msg, err=True)
+        error_msg = str(e)
+        console.print(f"[red]Error:[/red] {error_msg}")
+        click.echo(f"Error: {error_msg}", err=True)
         sys.exit(1)
     except YouTubeDownloadError as e:
-        error_msg = f"YouTube Error: {e}"
-        console.print(f"[red]{error_msg}[/red]")
-        click.echo(error_msg, err=True)
+        error_msg = str(e)
+        console.print(f"[red]YouTube Error:[/red] {error_msg}")
+        click.echo(f"YouTube Error: {error_msg}", err=True)
+
+        # Show cleaned underlying cause in verbose mode
+        if verbose and e.__cause__:
+            cause = str(e.__cause__).split('\n')[0]  # First line only
+            console.print(f"[dim]  Cause: {cause}[/dim]")
+            click.echo(f"  Cause: {cause}", err=True)
+
         sys.exit(1)
     except FileNotFoundError as e:
         error_msg = f"Error: {e}"
