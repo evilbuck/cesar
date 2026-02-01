@@ -5,23 +5,23 @@
 See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call — no cloud services, no API keys, no ongoing costs
-**Current focus:** Phase 11 - Orchestration & Formatting
+**Current focus:** Phase 12 - CLI Integration
 
 ## Current Position
 
-Phase: 11 of 13 (Orchestration & Formatting)
-Plan: Complete (2/2)
-Status: Phase verified
-Last activity: 2026-02-01 — Phase 11 execution complete
+Phase: 12 of 13 (CLI Integration)
+Plan: 1 of 2 complete
+Status: In progress
+Last activity: 2026-02-01 — Completed 12-01-PLAN.md
 
-Progress: [█████████░░░░░░░░░░░] 55% (23 of 42 total plans complete)
+Progress: [██████████░░░░░░░░░░] 57% (24 of 42 total plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 23
-- Average duration: ~2.7 min/plan (v2.1-v2.4)
-- Total execution time: ~41 min total
+- Total plans completed: 24
+- Average duration: ~2.8 min/plan (v2.1-v2.5)
+- Total execution time: ~45 min total
 
 **By Phase:**
 
@@ -38,10 +38,11 @@ Progress: [█████████░░░░░░░░░░░] 55% (23
 | 9. Configuration System | 2 | 5min | 2.5min |
 | 10. Speaker Diarization Core | 2 | 8min | 4min |
 | 11. Orchestration & Formatting | 2 | 6min | 3min |
+| 12. CLI Integration | 1 | 4min | 4min |
 
 **Recent Trend:**
-- Last 3 plans: 3min (10-02), 2min (11-01), 4min (11-02)
-- Trend: Consistent fast execution for Phase 11
+- Last 3 plans: 2min (11-01), 4min (11-02), 4min (12-01)
+- Trend: Consistent execution pace
 
 *Updated after each plan completion*
 
@@ -77,6 +78,9 @@ Recent decisions affecting current work:
 - v2.4: Transcription errors propagate, diarization/formatting errors trigger fallback
 - v2.4: keep_intermediate flag for debug mode (saves transcription.txt + diarization.json)
 - v2.4: Automatic file extension handling (.md for diarized, .txt for plain)
+- v2.5: Default --diarize to True (users get speaker labels by default)
+- v2.5: Auto-correct output extensions with user warning (.txt -> .md when diarize=True)
+- v2.5: Pass min/max_speakers through orchestrate() not constructor
 
 ### Pending Todos
 
@@ -84,11 +88,11 @@ None yet.
 
 ### Blockers/Concerns
 
-None yet.
+- Pre-existing test failures in TestYouTubeErrorFormatting and TestCLIConfigLoading (mock issues with CliRunner)
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Phase 11 complete and verified
+Stopped at: Completed 12-01-PLAN.md
 Resume file: None
-Next step: `/gsd:discuss-phase 12`
+Next step: Execute 12-02-PLAN.md (API diarization integration)
