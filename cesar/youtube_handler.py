@@ -176,8 +176,12 @@ def download_youtube_audio(url: str, output_dir: Optional[Path] = None) -> Path:
     """
     require_ffmpeg()
 
+    video_id = extract_video_id(url)
+
     if not is_youtube_url(url):
-        raise YouTubeURLError(f"Invalid YouTube URL: {url}")
+        raise YouTubeURLError(
+            f"Invalid YouTube URL (video: {video_id}). The URL format is not recognized."
+        )
 
     # Set up output path
     if output_dir is None:
@@ -209,17 +213,65 @@ def download_youtube_audio(url: str, output_dir: Optional[Path] = None) -> Path:
     except DownloadError as e:
         _cleanup_partial_files(output_dir, base_name)
         error_str = str(e).lower()
+
+        # Age-restricted (most specific first)
+        if 'sign in to confirm your age' in error_str:
+            raise YouTubeAgeRestrictedError(
+                f"Age-restricted video (video: {video_id}). "
+                "This video requires sign-in to verify age."
+            ) from e
+
+        # Private video
+        if 'private video' in error_str:
+            raise YouTubeUnavailableError(
+                f"Private video (video: {video_id}). "
+                "This video is private and cannot be accessed."
+            ) from e
+
+        # Geo-restricted
+        if 'not available in your country' in error_str or 'geo' in error_str:
+            raise YouTubeUnavailableError(
+                f"Geo-restricted video (video: {video_id}). "
+                "This video is not available in your region."
+            ) from e
+
+        # Network timeout
+        if 'timed out' in error_str or 'timeout' in error_str:
+            raise YouTubeNetworkError(
+                f"Network timeout (video: {video_id}). "
+                "Connection timed out. Check your network and try again."
+            ) from e
+
+        # Connection reset
+        if 'connection reset' in error_str or 'errno 104' in error_str:
+            raise YouTubeNetworkError(
+                f"Connection interrupted (video: {video_id}). "
+                "The connection was reset. Try again."
+            ) from e
+
+        # General network error
+        if any(term in error_str for term in ['network', 'connection', 'urlopen']):
+            raise YouTubeNetworkError(
+                f"Network error (video: {video_id}). "
+                "Could not connect to YouTube. Check your network and try again."
+            ) from e
+
+        # Rate limiting (403, 429)
         if '403' in error_str or 'forbidden' in error_str or '429' in error_str:
             raise YouTubeRateLimitError(
-                "YouTube blocked the download. This may be temporary rate limiting. "
-                "Try again in a few minutes or update yt-dlp."
+                f"YouTube is limiting requests (video: {video_id}). "
+                "This is YouTube throttling connections. Try again later."
             ) from e
-        elif 'unavailable' in error_str or 'private' in error_str:
+
+        # General unavailable
+        if 'unavailable' in error_str:
             raise YouTubeUnavailableError(
-                "Video is unavailable (may be private, deleted, or geo-blocked)"
+                f"Video unavailable (video: {video_id}). "
+                "This video may have been deleted or made private."
             ) from e
-        else:
-            raise YouTubeDownloadError(f"Download failed: {e}") from e
+
+        # Fallback
+        raise YouTubeDownloadError(f"Download failed: {e}") from e
 
     except ExtractorError as e:
         _cleanup_partial_files(output_dir, base_name)
