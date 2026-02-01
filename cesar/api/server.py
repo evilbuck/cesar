@@ -20,6 +20,12 @@ from cesar.api.file_handler import download_from_url, save_upload_file
 from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
+from cesar.config import (
+    CesarConfig,
+    ConfigError,
+    load_config,
+    get_api_config_path,
+)
 from cesar.youtube_handler import YouTubeDownloadError, check_ffmpeg_available, is_youtube_url
 
 logger = logging.getLogger(__name__)
@@ -33,6 +39,7 @@ async def lifespan(app: FastAPI):
     """Manage server lifecycle: start worker on startup, cleanup on shutdown.
 
     This async context manager:
+    - Loads configuration from config.toml in current directory
     - Initializes JobRepository and connects to database
     - Creates and starts BackgroundWorker in a task
     - Stores components in app.state for endpoint access
@@ -41,6 +48,21 @@ async def lifespan(app: FastAPI):
     Args:
         app: FastAPI application instance
     """
+    # Load configuration
+    config_path = get_api_config_path()
+    try:
+        config = load_config(config_path)
+        if config_path.exists():
+            logger.info(f"Loaded config from {config_path}")
+        else:
+            logger.debug("No config file found, using defaults")
+    except ConfigError as e:
+        logger.error(f"Config error: {e}")
+        raise  # Let server fail to start on invalid config
+
+    # Store config in app.state for endpoint access (used in Phase 13)
+    app.state.config = config
+
     # Startup: initialize repository and worker
     db_path = getattr(app.state, "db_path", DEFAULT_DB_PATH)
 
