@@ -16,19 +16,19 @@ Requirements for YouTube transcription milestone.
 
 ### Interface Integration (Uses Shared Service)
 
-- [ ] **INT-01**: CLI detects YouTube URLs and calls `youtube_handler.download_youtube_audio()`
-- [ ] **INT-02**: `file_handler.py` routes YouTube URLs to `youtube_handler` (API path)
+- [x] **INT-01**: CLI detects YouTube URLs and calls `youtube_handler.download_youtube_audio()`
+- [x] **INT-02**: `file_handler.py` routes YouTube URLs to `youtube_handler` (API path)
 
 ### System Validation
 
 - [x] **SYS-01**: FFmpeg presence validated on startup
 - [x] **SYS-02**: YouTube jobs rejected with clear error if FFmpeg missing
-- [ ] **SYS-03**: Health endpoint reports FFmpeg/YouTube support status
+- [x] **SYS-03**: Health endpoint reports FFmpeg/YouTube support status
 
 ### Progress & Feedback
 
-- [ ] **UX-01**: CLI shows download progress during YouTube audio extraction
-- [ ] **UX-02**: API job status includes download phase progress
+- [x] **UX-01**: CLI shows download progress during YouTube audio extraction
+- [x] **UX-02**: API job status includes download phase progress
 
 ### Error Handling
 
@@ -71,13 +71,13 @@ Acknowledged but deferred to future milestone.
 | YT-02 | Phase 6 | Complete |
 | YT-03 | Phase 6 | Complete |
 | YT-04 | Phase 6 | Complete |
-| INT-01 | Phase 7 | Pending |
-| INT-02 | Phase 7 | Pending |
+| INT-01 | Phase 7 | Complete |
+| INT-02 | Phase 7 | Complete |
 | SYS-01 | Phase 6 | Complete |
 | SYS-02 | Phase 6 | Complete |
-| SYS-03 | Phase 7 | Pending |
-| UX-01 | Phase 7 | Pending |
-| UX-02 | Phase 7 | Pending |
+| SYS-03 | Phase 7 | Complete |
+| UX-01 | Phase 7 | Complete |
+| UX-02 | Phase 7 | Complete |
 | ERR-01 | Phase 8 | Pending |
 | ERR-02 | Phase 8 | Pending |
 | ERR-03 | Phase 8 | Pending |
@@ -90,4 +90,4 @@ Acknowledged but deferred to future milestone.
 
 ---
 *Requirements defined: 2026-01-31*
-*Last updated: 2026-01-31 after initial definition*
+*Last updated: 2026-01-31 — Phase 7 requirements complete*
