@@ -5,7 +5,7 @@
 - ✅ **v1.0 Package & CLI** - Phase 1 (shipped 2026-01-23)
 - ✅ **v2.0 API** - Phases 2-5 (shipped 2026-01-23)
 - ✅ **v2.1 YouTube Transcription** - Phases 6-8 (shipped 2026-02-01)
-- 🚧 **v2.2 Speaker Identification** - Phases 9-13 (in progress)
+- ✅ **v2.2 Speaker Identification** - Phases 9-13 (shipped 2026-02-01)
 
 ## Phases
 
@@ -89,11 +89,12 @@ Plans:
 
 </details>
 
-### 🚧 v2.2 Speaker Identification (In Progress)
+<details>
+<summary>✅ v2.2 Speaker Identification (Phases 9-13) - SHIPPED 2026-02-01</summary>
 
 **Milestone Goal:** Add speaker diarization to transcripts with configurable defaults
 
-#### Phase 9: Configuration System
+### Phase 9: Configuration System
 **Goal**: Load and validate hierarchical configuration from TOML files
 **Depends on**: Nothing (independent foundation)
 **Requirements**: CONF-01, CONF-02, CONF-03, CONF-04, CONF-05, CONF-06, CONF-07
@@ -109,7 +110,7 @@ Plans:
 - [x] 09-01: Config foundation (Pydantic model, TOML loading, validation, template)
 - [x] 09-02: CLI and API config integration
 
-#### Phase 10: Speaker Diarization Core
+### Phase 10: Speaker Diarization Core
 **Goal**: Identify speakers in audio using pyannote with timestamp alignment
 **Depends on**: Phase 9 (config system for model paths and speaker count defaults)
 **Requirements**: DIAR-09, DIAR-10, DIAR-11, DIAR-12
@@ -125,7 +126,7 @@ Plans:
 - [x] 10-01: Core diarization module (pyannote pipeline, HF token, GPU detection)
 - [x] 10-02: Timestamp alignment (temporal intersection, segment splitting)
 
-#### Phase 11: Orchestration & Formatting
+### Phase 11: Orchestration & Formatting
 **Goal**: Coordinate transcription with diarization and format speaker-labeled output
 **Depends on**: Phase 10 (diarization capability must exist to orchestrate)
 **Requirements**: DIAR-03, DIAR-04, DIAR-05
@@ -140,7 +141,7 @@ Plans:
 - [x] 11-01: TDD formatter (MarkdownTranscriptFormatter with speaker headers and timestamps)
 - [x] 11-02: Orchestrator (TranscriptionOrchestrator coordinating pipeline with fallback)
 
-#### Phase 12: CLI Integration
+### Phase 12: CLI Integration
 **Goal**: User-facing CLI flag for speaker identification
 **Depends on**: Phase 11 (orchestration must work to expose via CLI)
 **Requirements**: DIAR-01, DIAR-06
@@ -154,7 +155,7 @@ Plans:
 Plans:
 - [x] 12-01: Add --diarize flag with orchestrator integration and multi-step progress
 
-#### Phase 13: API Integration
+### Phase 13: API Integration
 **Goal**: Speaker identification via API endpoints with job queue support
 **Depends on**: Phase 11 (orchestration must work to expose via API)
 **Requirements**: DIAR-02, DIAR-07, DIAR-08
@@ -167,9 +168,11 @@ Plans:
 **Plans**: 3 plans
 
 Plans:
-- [ ] 13-01: Models, database, and repository for diarization fields
-- [ ] 13-02: Worker integration with orchestrator
-- [ ] 13-03: Server endpoints and retry functionality
+- [x] 13-01: Models, database, and repository for diarization fields
+- [x] 13-02: Worker integration with orchestrator
+- [x] 13-03: Server endpoints and retry functionality
+
+</details>
 
 ## Progress
 
@@ -190,4 +193,4 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 10. Speaker Diarization Core | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 11. Orchestration & Formatting | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 12. CLI Integration | v2.2 | 1/1 | Complete | 2026-02-01 |
-| 13. API Integration | v2.2 | 0/3 | Not started | - |
+| 13. API Integration | v2.2 | 3/3 | Complete | 2026-02-01 |
