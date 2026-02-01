@@ -747,5 +747,68 @@ class TestTranscribeURL(unittest.TestCase):
         self.assertIsNone(data["download_progress"])
 
 
+class TestYouTubeExceptionHandler(unittest.TestCase):
+    """Tests for YouTube exception handler."""
+
+    def test_exception_handler_returns_error_type(self):
+        """Verify exception handler returns structured error response."""
+        from cesar.youtube_handler import YouTubeRateLimitError
+        from cesar.api.server import youtube_error_handler
+        import asyncio
+
+        exc = YouTubeRateLimitError("Test rate limit message")
+        mock_request = MagicMock()
+
+        response = asyncio.run(youtube_error_handler(mock_request, exc))
+
+        self.assertEqual(response.status_code, 429)
+        import json
+        body = json.loads(response.body)
+        self.assertEqual(body['error_type'], 'rate_limited')
+        self.assertIn('Test rate limit message', body['message'])
+
+    def test_exception_handler_uses_http_status(self):
+        """Verify handler uses http_status from exception."""
+        from cesar.youtube_handler import YouTubeNetworkError
+        from cesar.api.server import youtube_error_handler
+        import asyncio
+
+        exc = YouTubeNetworkError("Network timeout")
+        mock_request = MagicMock()
+        response = asyncio.run(youtube_error_handler(mock_request, exc))
+
+        self.assertEqual(response.status_code, 502)
+
+    def test_exception_handler_base_error(self):
+        """Verify handler works with base YouTubeDownloadError."""
+        from cesar.youtube_handler import YouTubeDownloadError
+        from cesar.api.server import youtube_error_handler
+        import asyncio
+
+        exc = YouTubeDownloadError("Generic error")
+        mock_request = MagicMock()
+        response = asyncio.run(youtube_error_handler(mock_request, exc))
+
+        self.assertEqual(response.status_code, 400)
+        import json
+        body = json.loads(response.body)
+        self.assertEqual(body['error_type'], 'youtube_error')
+
+    def test_exception_handler_unavailable_error(self):
+        """Verify handler returns 404 for unavailable video."""
+        from cesar.youtube_handler import YouTubeUnavailableError
+        from cesar.api.server import youtube_error_handler
+        import asyncio
+
+        exc = YouTubeUnavailableError("Video not found")
+        mock_request = MagicMock()
+        response = asyncio.run(youtube_error_handler(mock_request, exc))
+
+        self.assertEqual(response.status_code, 404)
+        import json
+        body = json.loads(response.body)
+        self.assertEqual(body['error_type'], 'video_unavailable')
+
+
 if __name__ == "__main__":
     unittest.main()

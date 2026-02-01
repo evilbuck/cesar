@@ -175,5 +175,93 @@ class TestCLI(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
 
 
+class TestYouTubeErrorFormatting(unittest.TestCase):
+    """Tests for CLI YouTube error message formatting."""
+
+    def setUp(self):
+        """Set up test environment."""
+        self.runner = CliRunner()
+        self.temp_dir = tempfile.mkdtemp()
+        self.output_file = Path(self.temp_dir) / "output.txt"
+
+    def tearDown(self):
+        """Clean up test files."""
+        import shutil
+        shutil.rmtree(self.temp_dir)
+
+    @patch('cesar.cli.download_youtube_audio')
+    @patch('cesar.cli.is_youtube_url', return_value=True)
+    def test_youtube_error_displays_message(self, mock_is_yt, mock_download):
+        """Test YouTube errors are displayed with user-friendly format."""
+        from cesar.youtube_handler import YouTubeUnavailableError
+        mock_download.side_effect = YouTubeUnavailableError(
+            "Private video (video: xyz789). This video is private."
+        )
+
+        result = self.runner.invoke(
+            transcribe,
+            ['https://youtube.com/watch?v=xyz789', '-o', str(self.output_file)]
+        )
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn('YouTube Error:', result.output)
+        self.assertIn('Private video', result.output)
+
+    @patch('cesar.cli.download_youtube_audio')
+    @patch('cesar.cli.is_youtube_url', return_value=True)
+    def test_verbose_shows_cause(self, mock_is_yt, mock_download):
+        """Test verbose mode shows underlying cause."""
+        from cesar.youtube_handler import YouTubeNetworkError
+        inner_error = Exception("HTTP Error 500: Internal Server Error")
+        outer_error = YouTubeNetworkError("Network error (video: abc123).")
+        outer_error.__cause__ = inner_error
+        mock_download.side_effect = outer_error
+
+        result = self.runner.invoke(
+            transcribe,
+            ['https://youtube.com/watch?v=abc123', '-o', str(self.output_file), '-v']
+        )
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn('Cause:', result.output)
+        self.assertIn('HTTP Error 500', result.output)
+
+    @patch('cesar.cli.download_youtube_audio')
+    @patch('cesar.cli.is_youtube_url', return_value=True)
+    def test_verbose_without_cause_no_crash(self, mock_is_yt, mock_download):
+        """Test verbose mode handles errors without __cause__."""
+        from cesar.youtube_handler import YouTubeRateLimitError
+        mock_download.side_effect = YouTubeRateLimitError("Rate limited (video: abc123).")
+
+        result = self.runner.invoke(
+            transcribe,
+            ['https://youtube.com/watch?v=abc123', '-o', str(self.output_file), '-v']
+        )
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn('YouTube Error:', result.output)
+        # Should not crash, and should not show "Cause:" line
+        self.assertNotIn('Cause:', result.output)
+
+    @patch('cesar.cli.download_youtube_audio')
+    @patch('cesar.cli.is_youtube_url', return_value=True)
+    def test_non_verbose_hides_cause(self, mock_is_yt, mock_download):
+        """Test non-verbose mode does not show underlying cause."""
+        from cesar.youtube_handler import YouTubeNetworkError
+        inner_error = Exception("HTTP Error 500: Internal Server Error")
+        outer_error = YouTubeNetworkError("Network error (video: abc123).")
+        outer_error.__cause__ = inner_error
+        mock_download.side_effect = outer_error
+
+        result = self.runner.invoke(
+            transcribe,
+            ['https://youtube.com/watch?v=abc123', '-o', str(self.output_file)]
+        )
+
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn('YouTube Error:', result.output)
+        self.assertNotIn('Cause:', result.output)
+
+
 if __name__ == "__main__":
     unittest.main()
