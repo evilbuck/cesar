@@ -14,16 +14,23 @@ A command-line tool for transcribing audio files to text using OpenAI's Whisper 
 - **Async Job Queue**: Persistent job queue with crash recovery for API server
 - **Simple Interface**: Single command execution with clear progress feedback
 - **Configurable Threading**: Auto-detect CPU cores or manual thread specification
+- **YouTube Support**: Transcribe YouTube videos directly by URL (requires FFmpeg)
 
 ## Installation
 
 1. **Install system dependencies:**
+
+   FFmpeg is required for audio processing and YouTube transcription.
+
    ```bash
    # macOS (using Homebrew)
    brew install ffmpeg
 
    # Ubuntu/Debian
    sudo apt update && sudo apt install ffmpeg
+
+   # Arch Linux
+   pacman -S ffmpeg
    ```
 
 2. **Install cesar:**
@@ -96,9 +103,118 @@ cesar transcribe podcast.mp3 -o podcast.txt --verbose
 cesar transcribe recording.wav -o recording.txt --quiet
 ```
 
+## YouTube Transcription
+
+Cesar v2.1+ supports transcribing YouTube videos directly by URL.
+
+### Quick Start
+
+```bash
+# CLI: Transcribe a YouTube video
+cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt
+
+# API: Submit YouTube URL for transcription
+curl -X POST http://localhost:5000/transcribe/url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://youtube.com/watch?v=VIDEO_ID", "model": "base"}'
+```
+
+### Requirements
+
+YouTube transcription requires:
+
+- **yt-dlp**: Installed automatically as a Python dependency
+- **FFmpeg**: Must be installed as a system binary
+
+Install FFmpeg:
+```bash
+# macOS
+brew install ffmpeg
+
+# Ubuntu/Debian
+sudo apt install ffmpeg
+
+# Arch Linux
+pacman -S ffmpeg
+```
+
+### CLI Usage
+
+```bash
+# Basic YouTube transcription
+cesar transcribe "https://youtube.com/watch?v=dQw4w9WgXcQ" -o output.txt
+
+# With model selection
+cesar transcribe "https://youtu.be/dQw4w9WgXcQ" -o output.txt --model small
+
+# YouTube Shorts
+cesar transcribe "https://youtube.com/shorts/abc123" -o output.txt
+```
+
+Supported URL formats:
+- `https://youtube.com/watch?v=VIDEO_ID`
+- `https://youtu.be/VIDEO_ID`
+- `https://youtube.com/shorts/VIDEO_ID`
+
+### API Usage
+
+Submit a YouTube URL for background transcription:
+
+```bash
+curl -X POST http://localhost:5000/transcribe/url \
+  -H "Content-Type: application/json" \
+  -d '{"url": "https://youtube.com/watch?v=VIDEO_ID", "model": "base"}'
+```
+
+Response (HTTP 202 Accepted):
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "status": "downloading",
+  "audio_path": "https://youtube.com/watch?v=VIDEO_ID",
+  "model_size": "base",
+  "download_progress": 0
+}
+```
+
+Poll job status to track progress:
+
+```bash
+curl http://localhost:5000/jobs/550e8400-e29b-41d4-a716-446655440000
+```
+
+Job status progression: `downloading` -> `processing` -> `completed`
+
+### Checking YouTube Support
+
+The health endpoint reports YouTube capability:
+
+```bash
+curl http://localhost:5000/health
+```
+
+```json
+{
+  "status": "healthy",
+  "worker": "running",
+  "youtube": {
+    "available": true,
+    "message": "YouTube transcription supported"
+  }
+}
+```
+
+If FFmpeg is not installed, `youtube.available` will be `false` with an explanatory message.
+
+### Limitations
+
+- **YouTube only**: Other video platforms (Vimeo, etc.) are not supported
+- **Public videos**: Private videos and age-restricted content cannot be accessed
+- **Rate limiting**: YouTube may temporarily block requests; wait and retry
+
 ## HTTP API Server
 
-Cesar v2.0+ includes an HTTP API server for programmatic access and integration with other services.
+Cesar v2.1+ includes an HTTP API server for programmatic access and integration with other services.
 
 ### Starting the Server
 
@@ -281,6 +397,7 @@ Processed 10 segments (15.2s elapsed)
 
 - **Platform**: macOS or Linux (Metal GPU acceleration on macOS, CUDA on Linux)
 - **Python**: 3.10 or higher
+- **FFmpeg**: Required for audio processing and YouTube transcription
 - **Memory**: Varies by model size and audio file length
 - **Storage**: Model cache requires 39MB - 1.5GB depending on model
 
