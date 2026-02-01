@@ -106,8 +106,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 09-01-PLAN.md — Config foundation (Pydantic model, TOML loading, validation, template)
-- [ ] 09-02-PLAN.md — CLI and API config integration
+- [x] 09-01: Config foundation (Pydantic model, TOML loading, validation, template)
+- [x] 09-02: CLI and API config integration
 
 #### Phase 10: Speaker Diarization Core
 **Goal**: Identify speakers in audio using pyannote with timestamp alignment
@@ -184,7 +184,7 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 6. YouTube Download | v2.1 | 2/2 | Complete | 2026-02-01 |
 | 7. CLI & API Integration | v2.1 | 3/3 | Complete | 2026-02-01 |
 | 8. Error Handling & Documentation | v2.1 | 2/2 | Complete | 2026-02-01 |
-| 9. Configuration System | v2.2 | 0/2 | Planned | - |
+| 9. Configuration System | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 10. Speaker Diarization Core | v2.2 | 0/TBD | Not started | - |
 | 11. Orchestration & Formatting | v2.2 | 0/TBD | Not started | - |
 | 12. CLI Integration | v2.2 | 0/TBD | Not started | - |

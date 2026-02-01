@@ -68,13 +68,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CONF-01 | Phase 9 | Pending |
-| CONF-02 | Phase 9 | Pending |
-| CONF-03 | Phase 9 | Pending |
-| CONF-04 | Phase 9 | Pending |
-| CONF-05 | Phase 9 | Pending |
-| CONF-06 | Phase 9 | Pending |
-| CONF-07 | Phase 9 | Pending |
+| CONF-01 | Phase 9 | Complete |
+| CONF-02 | Phase 9 | Complete |
+| CONF-03 | Phase 9 | Complete |
+| CONF-04 | Phase 9 | Complete |
+| CONF-05 | Phase 9 | Complete |
+| CONF-06 | Phase 9 | Complete |
+| CONF-07 | Phase 9 | Complete |
 | DIAR-09 | Phase 10 | Pending |
 | DIAR-10 | Phase 10 | Pending |
 | DIAR-11 | Phase 10 | Pending |
