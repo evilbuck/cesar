@@ -8,13 +8,13 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple, Union
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi import Path as PathParam
 from fastapi.responses import JSONResponse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from cesar.api.file_handler import download_from_url, save_upload_file
 from cesar.api.models import Job, JobStatus
@@ -235,11 +235,56 @@ async def transcribe_file_upload(
     return job
 
 
+class DiarizeOptions(BaseModel):
+    """Diarization options when using object form.
+
+    Allows fine-grained control over speaker diarization including
+    minimum and maximum speaker counts.
+    """
+
+    enabled: bool = True
+    min_speakers: Optional[int] = Field(default=None, ge=1)
+    max_speakers: Optional[int] = Field(default=None, ge=1)
+
+    @model_validator(mode='after')
+    def validate_speaker_range(self) -> 'DiarizeOptions':
+        """Validate min_speakers <= max_speakers when both are set."""
+        if (self.min_speakers is not None and
+            self.max_speakers is not None and
+            self.min_speakers > self.max_speakers):
+            raise ValueError(
+                f"min_speakers ({self.min_speakers}) cannot exceed "
+                f"max_speakers ({self.max_speakers})"
+            )
+        return self
+
+
 class TranscribeURLRequest(BaseModel):
     """Request body for URL-based transcription."""
 
     url: str
     model: str = "base"
+    diarize: Union[bool, DiarizeOptions] = True
+
+    def get_diarize_enabled(self) -> bool:
+        """Get whether diarization is enabled.
+
+        Returns:
+            True if diarization is enabled, False otherwise
+        """
+        if isinstance(self.diarize, bool):
+            return self.diarize
+        return self.diarize.enabled
+
+    def get_speaker_range(self) -> Tuple[Optional[int], Optional[int]]:
+        """Get min/max speaker range for diarization.
+
+        Returns:
+            Tuple of (min_speakers, max_speakers), both may be None
+        """
+        if isinstance(self.diarize, bool):
+            return (None, None)
+        return (self.diarize.min_speakers, self.diarize.max_speakers)
 
 
 @app.post("/transcribe/url", response_model=Job, status_code=status.HTTP_202_ACCEPTED)
