@@ -10,18 +10,18 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 ## Current Position
 
 Phase: 11 of 13 (Orchestration & Formatting)
-Plan: 1 of 2 (in progress)
-Status: In progress
-Last activity: 2026-02-01 — Completed 11-01-PLAN.md
+Plan: Complete (2/2)
+Status: Phase complete
+Last activity: 2026-02-01 — Completed 11-02-PLAN.md
 
-Progress: [█████████░░░░░░░░░░░] 52% (22 of 42 total plans complete)
+Progress: [█████████░░░░░░░░░░░] 55% (23 of 42 total plans complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 22
-- Average duration: ~2.6 min/plan (v2.1-v2.4)
-- Total execution time: ~37 min total
+- Total plans completed: 23
+- Average duration: ~2.7 min/plan (v2.1-v2.4)
+- Total execution time: ~41 min total
 
 **By Phase:**
 
@@ -37,11 +37,11 @@ Progress: [█████████░░░░░░░░░░░] 52% (22
 | 8. Error Handling & Documentation | 2 | - | - |
 | 9. Configuration System | 2 | 5min | 2.5min |
 | 10. Speaker Diarization Core | 2 | 8min | 4min |
-| 11. Orchestration & Formatting | 1 | 2min | 2min |
+| 11. Orchestration & Formatting | 2 | 6min | 3min |
 
 **Recent Trend:**
-- Last 3 plans: 5min (10-01), 3min (10-02), 2min (11-01)
-- Trend: Very fast execution for formatting logic
+- Last 3 plans: 3min (10-02), 2min (11-01), 4min (11-02)
+- Trend: Consistent fast execution for Phase 11
 
 *Updated after each plan completion*
 
@@ -73,6 +73,10 @@ Recent decisions affecting current work:
 - v2.4: Speaker label format "Speaker N" (human-friendly vs SPEAKER_XX)
 - v2.4: Markdown section headers for speakers (### Speaker N)
 - v2.4: Timestamps on separate line below speaker headers
+- v2.4: Progress allocation 0-60% transcription, 60-90% diarization, 90-100% formatting
+- v2.4: Transcription errors propagate, diarization/formatting errors trigger fallback
+- v2.4: keep_intermediate flag for debug mode (saves transcription.txt + diarization.json)
+- v2.4: Automatic file extension handling (.md for diarized, .txt for plain)
 
 ### Pending Todos
 
@@ -85,6 +89,6 @@ None yet.
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: Completed 11-01-PLAN.md
+Stopped at: Completed 11-02-PLAN.md (Phase 11 complete)
 Resume file: None
-Next step: `/gsd:execute-phase 11 02`
+Next step: `/gsd:discuss-phase 12`
