@@ -355,3 +355,41 @@ async def transcribe_from_url(request: TranscribeURLRequest):
         )
         await app.state.repo.create(job)
         return job
+
+
+@app.post("/jobs/{job_id}/retry", response_model=Job, status_code=status.HTTP_202_ACCEPTED)
+async def retry_diarization(job_id: str = PathParam(..., description="Job UUID")):
+    """Retry diarization on a job with partial failure.
+
+    Re-queues a job that has status=PARTIAL (transcription succeeded but
+    diarization failed) for another attempt at diarization.
+
+    Args:
+        job_id: Unique job identifier (UUID)
+
+    Returns:
+        Job: The job with status reset to QUEUED
+
+    Raises:
+        HTTPException: 404 if job not found
+        HTTPException: 400 if job status is not PARTIAL
+    """
+    job = await app.state.repo.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    if job.status != JobStatus.PARTIAL:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can only retry jobs with status 'partial'. Current: {job.status.value}"
+        )
+
+    # Re-queue for retry
+    job.status = JobStatus.QUEUED
+    job.diarization_error = None
+    job.diarization_error_code = None
+    job.started_at = None
+    job.completed_at = None
+    await app.state.repo.update(job)
+
+    return job
