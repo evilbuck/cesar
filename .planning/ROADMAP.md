@@ -149,10 +149,10 @@ Plans:
   2. Speaker identification works with local audio files via CLI
   3. CLI shows progress for both transcription and diarization steps
   4. CLI displays speaker count in output summary
-**Plans**: TBD
+**Plans**: 1 plan
 
 Plans:
-- [ ] 12-01: TBD
+- [ ] 12-01: Add --diarize flag with orchestrator integration and multi-step progress
 
 #### Phase 13: API Integration
 **Goal**: Speaker identification via API endpoints with job queue support
@@ -187,5 +187,5 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 9. Configuration System | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 10. Speaker Diarization Core | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 11. Orchestration & Formatting | v2.2 | 2/2 | Complete | 2026-02-01 |
-| 12. CLI Integration | v2.2 | 0/TBD | Not started | - |
+| 12. CLI Integration | v2.2 | 0/1 | Not started | - |
 | 13. API Integration | v2.2 | 0/TBD | Not started | - |
