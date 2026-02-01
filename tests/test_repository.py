@@ -232,6 +232,67 @@ class TestJobRepository(unittest.IsolatedAsyncioTestCase):
         self.assertIsInstance(retrieved.started_at, datetime)
         self.assertIsInstance(retrieved.completed_at, datetime)
 
+    async def test_create_job_with_download_progress(self):
+        """Test creating a job with download_progress field."""
+        job = Job(
+            audio_path="https://youtube.com/watch?v=test",
+            model_size="base",
+            status=JobStatus.DOWNLOADING,
+            download_progress=50
+        )
+
+        await self.repo.create(job)
+        retrieved = await self.repo.get(job.id)
+
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(retrieved.download_progress, 50)
+        self.assertEqual(retrieved.status, JobStatus.DOWNLOADING)
+
+    async def test_update_job_download_progress(self):
+        """Test updating download_progress field."""
+        job = Job(
+            audio_path="https://youtube.com/watch?v=test",
+            status=JobStatus.DOWNLOADING,
+            download_progress=0
+        )
+        await self.repo.create(job)
+
+        # Update progress to 100
+        job.download_progress = 100
+        await self.repo.update(job)
+
+        retrieved = await self.repo.get(job.id)
+        self.assertEqual(retrieved.download_progress, 100)
+
+    async def test_get_next_queued_returns_downloading(self):
+        """Test get_next_queued returns DOWNLOADING jobs."""
+        # Create a DOWNLOADING job
+        job = Job(
+            audio_path="https://youtube.com/watch?v=test",
+            status=JobStatus.DOWNLOADING,
+            download_progress=0
+        )
+        await self.repo.create(job)
+
+        # get_next_queued should return it
+        next_job = await self.repo.get_next_queued()
+        self.assertIsNotNone(next_job)
+        self.assertEqual(next_job.id, job.id)
+        self.assertEqual(next_job.status, JobStatus.DOWNLOADING)
+
+    async def test_get_job_returns_download_progress(self):
+        """Test retrieving job returns correct download_progress value."""
+        job = Job(
+            audio_path="https://youtube.com/watch?v=test",
+            status=JobStatus.DOWNLOADING,
+            download_progress=75
+        )
+        await self.repo.create(job)
+
+        retrieved = await self.repo.get(job.id)
+        self.assertIsNotNone(retrieved)
+        self.assertEqual(retrieved.download_progress, 75)
+
 
 class TestJobRepositoryPersistence(unittest.IsolatedAsyncioTestCase):
     """Test cases for JobRepository file-based persistence."""
