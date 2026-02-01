@@ -68,13 +68,39 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| (To be filled by roadmap creation) | | |
+| CONF-01 | Phase 9 | Pending |
+| CONF-02 | Phase 9 | Pending |
+| CONF-03 | Phase 9 | Pending |
+| CONF-04 | Phase 9 | Pending |
+| CONF-05 | Phase 9 | Pending |
+| CONF-06 | Phase 9 | Pending |
+| CONF-07 | Phase 9 | Pending |
+| DIAR-09 | Phase 10 | Pending |
+| DIAR-10 | Phase 10 | Pending |
+| DIAR-11 | Phase 10 | Pending |
+| DIAR-12 | Phase 10 | Pending |
+| DIAR-03 | Phase 11 | Pending |
+| DIAR-04 | Phase 11 | Pending |
+| DIAR-05 | Phase 11 | Pending |
+| DIAR-01 | Phase 12 | Pending |
+| DIAR-06 | Phase 12 | Pending |
+| DIAR-02 | Phase 13 | Pending |
+| DIAR-07 | Phase 13 | Pending |
+| DIAR-08 | Phase 13 | Pending |
 
 **Coverage:**
 - v2.2 requirements: 19 total
-- Mapped to phases: (pending roadmap)
-- Unmapped: (pending roadmap)
+- Mapped to phases: 19/19 (100%)
+- Unmapped: 0
+
+**Coverage verification:**
+- Phase 9: 7 requirements (all CONF)
+- Phase 10: 4 requirements (DIAR-09, DIAR-10, DIAR-11, DIAR-12)
+- Phase 11: 3 requirements (DIAR-03, DIAR-04, DIAR-05)
+- Phase 12: 2 requirements (DIAR-01, DIAR-06)
+- Phase 13: 3 requirements (DIAR-02, DIAR-07, DIAR-08)
+- Total: 19 requirements
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-01 after initial definition*
+*Last updated: 2026-02-01 after roadmap creation (100% coverage validated)*

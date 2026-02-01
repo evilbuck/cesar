@@ -4,62 +4,68 @@
 
 See: .planning/PROJECT.md (updated 2026-02-01)
 
-**Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** v2.2 Speaker Identification
+**Core value:** Transcribe audio to text anywhere, offline, with a single command or API call — no cloud services, no API keys, no ongoing costs
+**Current focus:** Phase 9 - Configuration System
 
 ## Current Position
 
-Phase: Not started (defining requirements)
-Plan: —
-Status: Defining requirements
-Last activity: 2026-02-01 — Milestone v2.2 Speaker Identification started
+Phase: 9 of 13 (Configuration System)
+Plan: Ready to plan
+Status: Ready to plan
+Last activity: 2026-02-01 — Roadmap created for v2.2 milestone
 
-Progress: Milestone initialized, proceeding to requirements
+Progress: [████████░░░░░░░░░░░░] 40% (8 of 13 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20 (v1.0: 3, v2.0: 7, v2.1: 7 + 3 prior milestones)
-- v2.1 average: ~3 min/plan
+- Total plans completed: 17
+- Average duration: ~3 min/plan (v2.1)
 - Total execution time: ~22 min for v2.1
 
-**By Milestone:**
+**By Phase:**
 
-| Milestone | Phases | Plans | Duration |
-|-----------|--------|-------|----------|
-| v1.0 Package & CLI | 1 | 3 | 1 day |
-| v2.0 API | 4 | 7 | 1 day |
-| v2.1 YouTube | 3 | 7 | 2 days |
+| Phase | Plans | Total | Avg/Plan |
+|-------|-------|-------|----------|
+| 1. Package & CLI | 3 | - | - |
+| 2. Database & Jobs | 2 | - | - |
+| 3. Background Worker | 1 | - | - |
+| 4. API Core | 2 | - | - |
+| 5. CLI Integration | 2 | - | - |
+| 6. YouTube Download | 2 | - | - |
+| 7. CLI & API Integration | 3 | - | - |
+| 8. Error Handling & Documentation | 2 | - | - |
+
+**Recent Trend:**
+- Last 5 plans: Not tracked
+- Trend: Stable
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-See PROJECT.md Key Decisions table for full history.
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
 
-### Findings
-
-Summarized in PROJECT.md Current State.
+- v2.1: yt-dlp for YouTube downloads (only viable option, youtube-dl unmaintained)
+- v2.1: m4a format for YouTube audio (smaller than wav, compatible with faster-whisper)
+- v2.1: DOWNLOADING status for YouTube jobs (separate download from transcription phase)
+- v2.0: Pydantic v2 models (validation, serialization, ConfigDict pattern)
+- v2.0: SQLite for job persistence (no external dependencies, fits offline-first)
 
 ### Pending Todos
 
-None.
+None yet.
 
 ### Blockers/Concerns
 
-None — milestone shipped successfully.
+None yet.
 
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: v2.1 milestone complete
+Stopped at: Roadmap creation complete for v2.2 milestone
 Resume file: None
-Next step: `/gsd:new-milestone` to start v2.2 planning
-
-## Milestone History
-
-- **v1.0 Package & CLI** — Shipped 2026-01-23 (1 phase, 3 plans)
-- **v2.0 API** — Shipped 2026-01-23 (4 phases, 7 plans)
-- **v2.1 YouTube Transcription** — Shipped 2026-02-01 (3 phases, 7 plans)
-
-See `.planning/MILESTONES.md` for full details.
+Next step: `/gsd:plan-phase 9`
