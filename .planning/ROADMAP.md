@@ -104,10 +104,12 @@ Plans:
   3. Network failures during download return clear error message suggesting retry
   4. YouTube rate limiting (403/429) returns clear error message with explanation
   5. README.md includes YouTube transcription examples and yt-dlp dependency notes
-**Plans**: TBD
+**Plans**: 3 plans
 
 Plans:
-- [ ] 08-01: TBD
+- [ ] 08-01-PLAN.md — Enhanced YouTube error types and detection patterns
+- [ ] 08-02-PLAN.md — CLI and API error response formatting
+- [ ] 08-03-PLAN.md — YouTube documentation in README
 
 ## Progress
 
@@ -123,4 +125,4 @@ Phases execute in numeric order: 6 -> 7 -> 8
 | 5. Server Command | v2.0 | 2/2 | Complete | 2026-01-23 |
 | 6. Core YouTube Module | v2.1 | 1/1 | Complete | 2026-01-31 |
 | 7. Interface Integration | v2.1 | 3/3 | Complete | 2026-01-31 |
-| 8. Error Handling & Docs | v2.1 | 0/TBD | Not started | - |
+| 8. Error Handling & Docs | v2.1 | 0/3 | Not started | - |
