@@ -4,7 +4,9 @@ Tests for FastAPI server and health endpoint.
 Uses FastAPI TestClient with mocked worker and repository
 to avoid actual database/transcription operations.
 """
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -808,6 +810,74 @@ class TestYouTubeExceptionHandler(unittest.TestCase):
         import json
         body = json.loads(response.body)
         self.assertEqual(body['error_type'], 'video_unavailable')
+
+
+class TestServerConfigLoading(unittest.TestCase):
+    """Tests for API server config file loading."""
+
+    def setUp(self):
+        """Set up test environment."""
+        self.temp_dir = tempfile.mkdtemp()
+        # Create mocks for repository and worker
+        self.mock_repo = MagicMock()
+        self.mock_repo.connect = AsyncMock()
+        self.mock_repo.close = AsyncMock()
+        self.mock_repo.get = AsyncMock()
+        self.mock_repo.list_all = AsyncMock(return_value=[])
+        self.mock_repo.create = AsyncMock()
+
+        self.mock_worker = MagicMock()
+        self.mock_worker.run = AsyncMock()
+        self.mock_worker.shutdown = AsyncMock()
+
+        # Patch the imports in server module
+        self.repo_patcher = patch("cesar.api.server.JobRepository")
+        self.worker_patcher = patch("cesar.api.server.BackgroundWorker")
+
+        self.mock_repo_class = self.repo_patcher.start()
+        self.mock_worker_class = self.worker_patcher.start()
+
+        self.mock_repo_class.return_value = self.mock_repo
+        self.mock_worker_class.return_value = self.mock_worker
+
+    def tearDown(self):
+        """Clean up test files and stop patches."""
+        import shutil
+        shutil.rmtree(self.temp_dir)
+        self.repo_patcher.stop()
+        self.worker_patcher.stop()
+
+    @patch('cesar.api.server.get_api_config_path')
+    def test_server_starts_without_config(self, mock_get_path):
+        """Test server starts when no config file exists."""
+        # Point to non-existent config
+        config_path = Path(self.temp_dir) / "config.toml"
+        mock_get_path.return_value = config_path
+
+        from cesar.api.server import app
+
+        # Server should start successfully
+        with TestClient(app) as client:
+            response = client.get("/health")
+            self.assertEqual(response.status_code, 200)
+
+    @patch('cesar.api.server.get_api_config_path')
+    def test_server_fails_on_invalid_config(self, mock_get_path):
+        """Test server fails to start with invalid config."""
+        # Create invalid config file
+        config_path = Path(self.temp_dir) / "config.toml"
+        config_path.write_text('min_speakers = -5')
+        mock_get_path.return_value = config_path
+
+        from cesar.api.server import app
+
+        # Server should fail to start (lifespan raises ConfigError)
+        with self.assertRaises(Exception) as context:
+            with TestClient(app) as client:
+                pass  # Should fail during lifespan startup
+
+        # Verify it's a config error
+        self.assertIn('min_speakers', str(context.exception))
 
 
 if __name__ == "__main__":

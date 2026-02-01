@@ -263,5 +263,57 @@ class TestYouTubeErrorFormatting(unittest.TestCase):
         self.assertNotIn('Cause:', result.output)
 
 
+class TestCLIConfigLoading(unittest.TestCase):
+    """Tests for CLI config file loading."""
+
+    def setUp(self):
+        """Set up test environment with isolated config."""
+        self.runner = CliRunner()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test files."""
+        import shutil
+        shutil.rmtree(self.temp_dir)
+
+    @patch('cesar.cli.get_cli_config_path')
+    def test_cli_runs_without_config(self, mock_get_path):
+        """Test CLI runs when no config file exists."""
+        # Point to non-existent config
+        config_path = Path(self.temp_dir) / "config.toml"
+        mock_get_path.return_value = config_path
+
+        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn('not found', result.output)
+        self.assertIn('using defaults', result.output)
+
+    @patch('cesar.cli.get_cli_config_path')
+    def test_cli_fails_on_invalid_config(self, mock_get_path):
+        """Test CLI exits with error on invalid config."""
+        # Create invalid config file
+        config_path = Path(self.temp_dir) / "config.toml"
+        config_path.write_text('diarize = "invalid"')
+        mock_get_path.return_value = config_path
+
+        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        self.assertEqual(result.exit_code, 1)
+        self.assertIn('Configuration Error', result.output)
+        self.assertIn('diarize', result.output)
+
+    @patch('cesar.cli.get_cli_config_path')
+    def test_cli_loads_valid_config(self, mock_get_path):
+        """Test CLI successfully loads valid config."""
+        # Create valid config file
+        config_path = Path(self.temp_dir) / "config.toml"
+        config_path.write_text('diarize = true\nmin_speakers = 2')
+        mock_get_path.return_value = config_path
+
+        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        self.assertEqual(result.exit_code, 0)
+        # Should not show "not found" message when config exists
+        self.assertNotIn('not found', result.output)
+
+
 if __name__ == "__main__":
     unittest.main()
