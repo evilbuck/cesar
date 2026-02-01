@@ -75,8 +75,11 @@ class JobRepository:
             INSERT INTO jobs (id, status, audio_path, model_size,
                               created_at, started_at, completed_at,
                               result_text, detected_language, error_message,
-                              download_progress)
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                              download_progress, diarize, min_speakers, max_speakers,
+                              progress, progress_phase, progress_phase_pct,
+                              speaker_count, diarized, diarization_error,
+                              diarization_error_code)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 job.id,
@@ -90,6 +93,16 @@ class JobRepository:
                 job.detected_language,
                 job.error_message,
                 job.download_progress,
+                1 if job.diarize else 0,
+                job.min_speakers,
+                job.max_speakers,
+                job.progress,
+                job.progress_phase,
+                job.progress_phase_pct,
+                job.speaker_count,
+                1 if job.diarized else (0 if job.diarized is False else None),
+                job.diarization_error,
+                job.diarization_error_code,
             ),
         )
         await self._connection.commit()
@@ -115,7 +128,8 @@ class JobRepository:
     async def update(self, job: Job) -> Job:
         """Update existing job.
 
-        Updates all mutable fields: status, timestamps, results, error, audio_path, download_progress.
+        Updates all mutable fields: status, timestamps, results, error, audio_path,
+        download_progress, and all diarization fields.
         Note: audio_path is updated to support YouTube download flow (URL -> downloaded file path).
 
         Args:
@@ -129,7 +143,10 @@ class JobRepository:
             UPDATE jobs SET
                 status = ?, audio_path = ?, started_at = ?, completed_at = ?,
                 result_text = ?, detected_language = ?, error_message = ?,
-                download_progress = ?
+                download_progress = ?, diarize = ?, min_speakers = ?, max_speakers = ?,
+                progress = ?, progress_phase = ?, progress_phase_pct = ?,
+                speaker_count = ?, diarized = ?, diarization_error = ?,
+                diarization_error_code = ?
             WHERE id = ?
             """,
             (
@@ -141,6 +158,16 @@ class JobRepository:
                 job.detected_language,
                 job.error_message,
                 job.download_progress,
+                1 if job.diarize else 0,
+                job.min_speakers,
+                job.max_speakers,
+                job.progress,
+                job.progress_phase,
+                job.progress_phase_pct,
+                job.speaker_count,
+                1 if job.diarized else (0 if job.diarized is False else None),
+                job.diarization_error,
+                job.diarization_error_code,
                 job.id,
             ),
         )
@@ -181,6 +208,11 @@ class JobRepository:
 
         Args:
             row: Tuple of column values from database
+                 Column order: id, status, audio_path, model_size, created_at,
+                 started_at, completed_at, result_text, detected_language,
+                 error_message, download_progress, diarize, min_speakers,
+                 max_speakers, progress, progress_phase, progress_phase_pct,
+                 speaker_count, diarized, diarization_error, diarization_error_code
 
         Returns:
             Job model instance
@@ -197,4 +229,14 @@ class JobRepository:
             detected_language=row[8],
             error_message=row[9],
             download_progress=row[10],
+            diarize=bool(row[11]) if row[11] is not None else True,
+            min_speakers=row[12],
+            max_speakers=row[13],
+            progress=row[14],
+            progress_phase=row[15],
+            progress_phase_pct=row[16],
+            speaker_count=row[17],
+            diarized=bool(row[18]) if row[18] is not None else None,
+            diarization_error=row[19],
+            diarization_error_code=row[20],
         )
