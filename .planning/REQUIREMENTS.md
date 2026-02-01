@@ -11,9 +11,9 @@ Requirements for speaker identification and configuration system milestone.
 
 - [ ] **DIAR-01**: User can enable speaker identification via CLI flag
 - [ ] **DIAR-02**: User can enable speaker identification via API parameter
-- [ ] **DIAR-03**: Transcript output includes speaker labels (Speaker 1, Speaker 2, etc.)
-- [ ] **DIAR-04**: Transcript output includes timestamps for each speaker segment
-- [ ] **DIAR-05**: Speaker-labeled output uses Markdown format with inline bold labels
+- [x] **DIAR-03**: Transcript output includes speaker labels (Speaker 1, Speaker 2, etc.)
+- [x] **DIAR-04**: Transcript output includes timestamps for each speaker segment
+- [x] **DIAR-05**: Speaker-labeled output uses Markdown format with inline bold labels
 - [ ] **DIAR-06**: Speaker identification works with local audio files
 - [ ] **DIAR-07**: Speaker identification works with URL audio sources
 - [ ] **DIAR-08**: Speaker identification works with YouTube videos
@@ -79,9 +79,9 @@ Which phases cover which requirements. Updated during roadmap creation.
 | DIAR-10 | Phase 10 | Complete |
 | DIAR-11 | Phase 10 | Complete |
 | DIAR-12 | Phase 10 | Complete |
-| DIAR-03 | Phase 11 | Pending |
-| DIAR-04 | Phase 11 | Pending |
-| DIAR-05 | Phase 11 | Pending |
+| DIAR-03 | Phase 11 | Complete |
+| DIAR-04 | Phase 11 | Complete |
+| DIAR-05 | Phase 11 | Complete |
 | DIAR-01 | Phase 12 | Pending |
 | DIAR-06 | Phase 12 | Pending |
 | DIAR-02 | Phase 13 | Pending |

@@ -137,8 +137,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 11-01-PLAN.md — TDD formatter (MarkdownTranscriptFormatter with speaker headers and timestamps)
-- [ ] 11-02-PLAN.md — Orchestrator (TranscriptionOrchestrator coordinating pipeline with fallback)
+- [x] 11-01: TDD formatter (MarkdownTranscriptFormatter with speaker headers and timestamps)
+- [x] 11-02: Orchestrator (TranscriptionOrchestrator coordinating pipeline with fallback)
 
 #### Phase 12: CLI Integration
 **Goal**: User-facing CLI flag for speaker identification
@@ -186,6 +186,6 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 8. Error Handling & Documentation | v2.1 | 2/2 | Complete | 2026-02-01 |
 | 9. Configuration System | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 10. Speaker Diarization Core | v2.2 | 2/2 | Complete | 2026-02-01 |
-| 11. Orchestration & Formatting | v2.2 | 0/2 | Not started | - |
+| 11. Orchestration & Formatting | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 12. CLI Integration | v2.2 | 0/TBD | Not started | - |
 | 13. API Integration | v2.2 | 0/TBD | Not started | - |
