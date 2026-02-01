@@ -122,8 +122,8 @@ Plans:
 **Plans**: 2 plans
 
 Plans:
-- [ ] 10-01-PLAN.md — Core diarization module (pyannote pipeline, HF token, GPU detection)
-- [ ] 10-02-PLAN.md — Timestamp alignment (temporal intersection, segment splitting)
+- [x] 10-01: Core diarization module (pyannote pipeline, HF token, GPU detection)
+- [x] 10-02: Timestamp alignment (temporal intersection, segment splitting)
 
 #### Phase 11: Orchestration & Formatting
 **Goal**: Coordinate transcription with diarization and format speaker-labeled output
@@ -134,11 +134,11 @@ Plans:
   2. Transcript output includes timestamps for each speaker segment
   3. Speaker-labeled output uses Markdown format with inline bold labels
   4. Plain text transcripts and speaker-labeled transcripts use consistent formatting
-**Plans**: TBD
+**Plans**: 2 plans
 
 Plans:
-- [ ] 11-01: TBD
-- [ ] 11-02: TBD
+- [ ] 11-01-PLAN.md — TDD formatter (MarkdownTranscriptFormatter with speaker headers and timestamps)
+- [ ] 11-02-PLAN.md — Orchestrator (TranscriptionOrchestrator coordinating pipeline with fallback)
 
 #### Phase 12: CLI Integration
 **Goal**: User-facing CLI flag for speaker identification
@@ -186,6 +186,6 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 8. Error Handling & Documentation | v2.1 | 2/2 | Complete | 2026-02-01 |
 | 9. Configuration System | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 10. Speaker Diarization Core | v2.2 | 2/2 | Complete | 2026-02-01 |
-| 11. Orchestration & Formatting | v2.2 | 0/TBD | Not started | - |
+| 11. Orchestration & Formatting | v2.2 | 0/2 | Not started | - |
 | 12. CLI Integration | v2.2 | 0/TBD | Not started | - |
 | 13. API Integration | v2.2 | 0/TBD | Not started | - |
