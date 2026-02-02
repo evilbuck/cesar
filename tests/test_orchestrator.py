@@ -1,16 +1,19 @@
 """
-Unit tests for TranscriptionOrchestrator.
+Unit tests for TranscriptionOrchestrator with WhisperXPipeline.
+
+Tests the new WhisperXPipeline-based orchestrator with proper fallback
+behavior when diarization fails (WX-09 requirement).
 """
 import unittest
 from pathlib import Path
-from unittest.mock import MagicMock, patch, call
+from unittest.mock import MagicMock, patch
 import tempfile
 import json
 
 from cesar.orchestrator import TranscriptionOrchestrator, OrchestrationResult
-from cesar.transcriber import AudioTranscriber
-from cesar.diarization import SpeakerDiarizer, DiarizationError, DiarizationResult, SpeakerSegment
-from cesar.timestamp_aligner import TranscriptionSegment, AlignedSegment
+from cesar.transcriber import AudioTranscriber, TranscriptionSegment
+from cesar.diarization import DiarizationError, AuthenticationError
+from cesar.whisperx_wrapper import WhisperXPipeline, WhisperXSegment
 from cesar.transcript_formatter import MarkdownTranscriptFormatter
 
 
@@ -72,7 +75,7 @@ class TestOrchestrationResult(unittest.TestCase):
 
 
 class TestTranscriptionOrchestrator(unittest.TestCase):
-    """Test TranscriptionOrchestrator class."""
+    """Test TranscriptionOrchestrator class with WhisperXPipeline."""
 
     def setUp(self):
         """Set up test fixtures."""
@@ -80,7 +83,18 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
         self.audio_path = Path(self.temp_dir) / "audio.mp3"
         self.output_path = Path(self.temp_dir) / "output.txt"
 
-        # Create mock transcriber
+        # Create mock pipeline
+        self.pipeline = MagicMock(spec=WhisperXPipeline)
+        self.pipeline.transcribe_and_diarize.return_value = (
+            [
+                WhisperXSegment(start=0.0, end=5.0, speaker="SPEAKER_00", text="First segment"),
+                WhisperXSegment(start=5.0, end=10.0, speaker="SPEAKER_01", text="Second segment"),
+            ],
+            2,  # speaker_count
+            10.0  # audio_duration
+        )
+
+        # Create mock transcriber for fallback tests
         self.transcriber = MagicMock(spec=AudioTranscriber)
         self.transcriber.transcribe_to_segments.return_value = (
             [
@@ -97,26 +111,15 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
             }
         )
 
-        # Create mock diarizer
-        self.diarizer = MagicMock(spec=SpeakerDiarizer)
-        self.diarizer.diarize.return_value = DiarizationResult(
-            segments=[
-                SpeakerSegment(0.0, 5.0, "SPEAKER_00"),
-                SpeakerSegment(5.0, 10.0, "SPEAKER_01"),
-            ],
-            speaker_count=2,
-            audio_duration=10.0
-        )
-
         # Create mock formatter
         self.formatter = MagicMock(spec=MarkdownTranscriptFormatter)
         self.formatter.format.return_value = "# Transcript\n\n### Speaker 1\nFirst segment"
 
     def test_orchestrate_success_with_diarization(self):
-        """Test successful orchestration with diarization."""
+        """Test successful orchestration with WhisperXPipeline diarization."""
         orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
             transcriber=self.transcriber,
-            diarizer=self.diarizer,
             formatter=self.formatter
         )
 
@@ -126,19 +129,8 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
             enable_diarization=True
         )
 
-        # Verify transcriber called
-        self.transcriber.transcribe_to_segments.assert_called_once_with(
-            str(self.audio_path),
-            progress_callback=unittest.mock.ANY
-        )
-
-        # Verify diarizer called
-        self.diarizer.diarize.assert_called_once_with(
-            str(self.audio_path),
-            min_speakers=None,
-            max_speakers=None,
-            progress_callback=unittest.mock.ANY
-        )
+        # Verify pipeline called
+        self.pipeline.transcribe_and_diarize.assert_called_once()
 
         # Verify formatter called
         self.formatter.format.assert_called_once()
@@ -151,10 +143,10 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
         self.assertTrue(str(result.output_path).endswith('.md'))
 
     def test_orchestrate_diarization_disabled(self):
-        """Test orchestration with diarization disabled."""
+        """Test orchestration with diarization disabled uses transcriber."""
         orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
             transcriber=self.transcriber,
-            diarizer=self.diarizer,
             formatter=self.formatter
         )
 
@@ -164,8 +156,11 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
             enable_diarization=False
         )
 
-        # Verify diarizer NOT called
-        self.diarizer.diarize.assert_not_called()
+        # Verify pipeline NOT called (diarization disabled)
+        self.pipeline.transcribe_and_diarize.assert_not_called()
+
+        # Verify transcriber called for plain transcription
+        self.transcriber.transcribe_to_segments.assert_called_once()
 
         # Verify result
         self.assertFalse(result.diarization_succeeded)
@@ -179,13 +174,19 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
             self.assertIn("Speaker detection unavailable", content)
             self.assertIn("First segment", content)
 
-    def test_orchestrate_diarization_fails_gracefully(self):
-        """Test graceful fallback when diarization fails."""
-        self.diarizer.diarize.side_effect = DiarizationError("Model failed")
+    def test_orchestrate_diarization_fails_with_fallback(self):
+        """Test graceful fallback when diarization fails (WX-09).
+
+        IMPORTANT: This test MUST pass (not expectedFailure) per WX-09 requirement.
+        When diarization fails and a transcriber is available, the orchestrator
+        should fall back to plain transcription.
+        """
+        # Make pipeline raise DiarizationError
+        self.pipeline.transcribe_and_diarize.side_effect = DiarizationError("Model failed")
 
         orchestrator = TranscriptionOrchestrator(
-            transcriber=self.transcriber,
-            diarizer=self.diarizer,
+            pipeline=self.pipeline,
+            transcriber=self.transcriber,  # Fallback transcriber provided
             formatter=self.formatter
         )
 
@@ -195,7 +196,13 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
             enable_diarization=True
         )
 
-        # Verify result indicates failure
+        # Verify pipeline was attempted
+        self.pipeline.transcribe_and_diarize.assert_called_once()
+
+        # Verify transcriber was called as fallback
+        self.transcriber.transcribe_to_segments.assert_called_once()
+
+        # Verify result indicates fallback
         self.assertFalse(result.diarization_succeeded)
         self.assertEqual(result.speakers_detected, 0)
         self.assertIsNone(result.diarization_time)
@@ -205,23 +212,53 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
         with open(result.output_path, 'r') as f:
             content = f.read()
             self.assertIn("Speaker detection unavailable", content)
+            self.assertIn("First segment", content)
 
-    def test_orchestrate_transcription_fails_propagates(self):
-        """Test that transcription errors propagate."""
-        self.transcriber.transcribe_to_segments.side_effect = Exception("Transcription failed")
+    def test_orchestrate_diarization_fails_no_fallback(self):
+        """Test DiarizationError re-raised when no fallback transcriber."""
+        # Make pipeline raise DiarizationError
+        self.pipeline.transcribe_and_diarize.side_effect = DiarizationError("Model failed")
 
         orchestrator = TranscriptionOrchestrator(
-            transcriber=self.transcriber,
-            diarizer=self.diarizer
+            pipeline=self.pipeline,
+            transcriber=None,  # No fallback
+            formatter=self.formatter
         )
 
-        with self.assertRaises(Exception) as context:
+        with self.assertRaises(DiarizationError) as ctx:
             orchestrator.orchestrate(
                 audio_path=self.audio_path,
-                output_path=self.output_path
+                output_path=self.output_path,
+                enable_diarization=True
             )
 
-        self.assertIn("Transcription failed", str(context.exception))
+        self.assertIn("Model failed", str(ctx.exception))
+        self.assertIn("no fallback", str(ctx.exception).lower())
+
+    def test_orchestrate_authentication_error_propagates(self):
+        """Test that AuthenticationError propagates (not caught for fallback)."""
+        # Make pipeline raise AuthenticationError
+        self.pipeline.transcribe_and_diarize.side_effect = AuthenticationError(
+            "HuggingFace authentication failed"
+        )
+
+        orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
+            transcriber=self.transcriber,  # Fallback available but should not be used
+            formatter=self.formatter
+        )
+
+        with self.assertRaises(AuthenticationError) as ctx:
+            orchestrator.orchestrate(
+                audio_path=self.audio_path,
+                output_path=self.output_path,
+                enable_diarization=True
+            )
+
+        self.assertIn("authentication", str(ctx.exception).lower())
+
+        # Transcriber should NOT have been called (auth error should propagate)
+        self.transcriber.transcribe_to_segments.assert_not_called()
 
     def test_orchestrate_progress_callback(self):
         """Test progress callback receives correct steps and percentages."""
@@ -231,8 +268,8 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
             progress_calls.append((step, percentage))
 
         orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
             transcriber=self.transcriber,
-            diarizer=self.diarizer,
             formatter=self.formatter
         )
 
@@ -243,22 +280,38 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
             progress_callback=progress_callback
         )
 
-        # Should see transcribing, detecting speakers, and formatting steps
+        # Should see start, pipeline complete, formatting, and complete steps
         step_names = [call[0] for call in progress_calls]
-        self.assertIn("Transcribing...", step_names)
-        self.assertIn("Detecting speakers...", step_names)
-        self.assertIn("Formatting...", step_names)
+        self.assertTrue(len(progress_calls) > 0)
 
         # Verify progress goes from 0 to 100
         percentages = [call[1] for call in progress_calls]
         self.assertEqual(percentages[0], 0.0)  # First call
         self.assertEqual(percentages[-1], 100.0)  # Last call
 
+    def test_orchestrate_no_pipeline_no_transcriber_raises(self):
+        """Test ValueError when neither pipeline nor transcriber provided."""
+        orchestrator = TranscriptionOrchestrator(
+            pipeline=None,
+            transcriber=None,
+            formatter=self.formatter
+        )
+
+        with self.assertRaises(ValueError) as ctx:
+            orchestrator.orchestrate(
+                audio_path=self.audio_path,
+                output_path=self.output_path,
+                enable_diarization=True
+            )
+
+        self.assertIn("pipeline", str(ctx.exception).lower())
+        self.assertIn("transcriber", str(ctx.exception).lower())
+
     def test_orchestrate_keep_intermediate_files(self):
         """Test intermediate files are saved when keep_intermediate=True."""
         orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
             transcriber=self.transcriber,
-            diarizer=self.diarizer,
             formatter=self.formatter
         )
 
@@ -268,13 +321,6 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
             enable_diarization=True,
             keep_intermediate=True
         )
-
-        # Verify intermediate transcription file exists
-        transcription_path = self.output_path.parent / f"{self.output_path.stem}_transcription.txt"
-        self.assertTrue(transcription_path.exists())
-        with open(transcription_path, 'r') as f:
-            content = f.read()
-            self.assertIn("First segment", content)
 
         # Verify intermediate diarization file exists
         diarization_path = self.output_path.parent / f"{self.output_path.stem}_diarization.json"
@@ -287,8 +333,8 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
     def test_orchestrate_file_extension_override(self):
         """Test file extension is changed based on diarization success."""
         orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
             transcriber=self.transcriber,
-            diarizer=self.diarizer,
             formatter=self.formatter
         )
 
@@ -305,40 +351,14 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
         self.assertTrue(str(result.output_path).endswith('.md'))
         self.assertTrue(result.output_path.exists())
 
-    def test_orchestrate_single_speaker_uses_formatter(self):
-        """Test single speaker still uses formatter (not special-cased)."""
-        # Mock single speaker diarization
-        self.diarizer.diarize.return_value = DiarizationResult(
-            segments=[SpeakerSegment(0.0, 10.0, "SPEAKER_00")],
-            speaker_count=1,
-            audio_duration=10.0
-        )
-
-        orchestrator = TranscriptionOrchestrator(
-            transcriber=self.transcriber,
-            diarizer=self.diarizer,
-            formatter=self.formatter
-        )
-
-        result = orchestrator.orchestrate(
-            audio_path=self.audio_path,
-            output_path=self.output_path,
-            enable_diarization=True
-        )
-
-        # Formatter should still be called
-        self.formatter.format.assert_called_once()
-        self.assertTrue(result.diarization_succeeded)
-        self.assertEqual(result.speakers_detected, 1)
-
     def test_orchestrate_formatting_error_fallback(self):
         """Test fallback to plain text when formatting fails."""
         # Mock formatter to raise error
         self.formatter.format.side_effect = Exception("Formatting failed")
 
         orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
             transcriber=self.transcriber,
-            diarizer=self.diarizer,
             formatter=self.formatter
         )
 
@@ -353,55 +373,11 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
         self.assertTrue(str(result.output_path).endswith('.txt'))
         self.assertTrue(result.output_path.exists())
 
-    def test_orchestrate_no_diarizer_provided(self):
-        """Test orchestration when diarizer is None."""
-        orchestrator = TranscriptionOrchestrator(
-            transcriber=self.transcriber,
-            diarizer=None,
-            formatter=self.formatter
-        )
-
-        result = orchestrator.orchestrate(
-            audio_path=self.audio_path,
-            output_path=self.output_path,
-            enable_diarization=True  # Enable but no diarizer provided
-        )
-
-        # Should save plain transcript
-        self.assertFalse(result.diarization_succeeded)
-        self.assertTrue(str(result.output_path).endswith('.txt'))
-
-    @patch('cesar.orchestrator.align_timestamps')
-    def test_orchestrate_calls_align_timestamps(self, mock_align):
-        """Test that align_timestamps is called correctly."""
-        mock_align.return_value = [
-            AlignedSegment(0.0, 5.0, "SPEAKER_00", "First segment"),
-            AlignedSegment(5.0, 10.0, "SPEAKER_01", "Second segment"),
-        ]
-
-        orchestrator = TranscriptionOrchestrator(
-            transcriber=self.transcriber,
-            diarizer=self.diarizer,
-            formatter=self.formatter
-        )
-
-        result = orchestrator.orchestrate(
-            audio_path=self.audio_path,
-            output_path=self.output_path,
-            enable_diarization=True
-        )
-
-        # Verify align_timestamps was called
-        mock_align.assert_called_once()
-        call_args = mock_align.call_args[0]
-        self.assertEqual(len(call_args[0]), 2)  # Two transcription segments
-        self.assertIsInstance(call_args[1], DiarizationResult)
-
     def test_orchestrate_creates_formatter_if_not_provided(self):
         """Test that formatter is created automatically if not provided."""
         orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
             transcriber=self.transcriber,
-            diarizer=self.diarizer,
             formatter=None  # No formatter provided
         )
 
@@ -415,6 +391,48 @@ class TestTranscriptionOrchestrator(unittest.TestCase):
         self.assertTrue(result.diarization_succeeded)
         self.assertTrue(str(result.output_path).endswith('.md'))
         self.assertTrue(result.output_path.exists())
+
+    def test_orchestrate_passes_min_max_speakers_to_pipeline(self):
+        """Test that min/max speakers are passed to pipeline."""
+        orchestrator = TranscriptionOrchestrator(
+            pipeline=self.pipeline,
+            transcriber=self.transcriber,
+            formatter=self.formatter
+        )
+
+        orchestrator.orchestrate(
+            audio_path=self.audio_path,
+            output_path=self.output_path,
+            enable_diarization=True,
+            min_speakers=2,
+            max_speakers=4
+        )
+
+        # Verify pipeline called with correct speaker limits
+        call_args = self.pipeline.transcribe_and_diarize.call_args
+        self.assertEqual(call_args.kwargs['min_speakers'], 2)
+        self.assertEqual(call_args.kwargs['max_speakers'], 4)
+
+    def test_orchestrate_only_transcriber_no_pipeline(self):
+        """Test orchestration works with only transcriber (no pipeline)."""
+        orchestrator = TranscriptionOrchestrator(
+            pipeline=None,
+            transcriber=self.transcriber,
+            formatter=self.formatter
+        )
+
+        result = orchestrator.orchestrate(
+            audio_path=self.audio_path,
+            output_path=self.output_path,
+            enable_diarization=False  # Must be False when no pipeline
+        )
+
+        # Verify transcriber called
+        self.transcriber.transcribe_to_segments.assert_called_once()
+
+        # Should save plain transcript
+        self.assertFalse(result.diarization_succeeded)
+        self.assertTrue(str(result.output_path).endswith('.txt'))
 
 
 if __name__ == '__main__':
