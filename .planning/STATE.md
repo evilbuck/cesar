@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 15 - Orchestrator Simplification
-Plan: 03 of 3 complete
-Status: Phase complete
-Last activity: 2026-02-02 — Completed 15-03-PLAN.md (Unit test migration)
+Phase: 16 - Interface Verification
+Plan: 02 of 3 complete
+Status: In progress
+Last activity: 2026-02-02 — Completed 16-02-PLAN.md (E2E API diarization tests)
 
-Progress: [████████████░░░░░░░░] 67% (6/9 plans in v2.3)
+Progress: [██████████████░░░░░░] 78% (7/9 plans in v2.3)
 
 ## Performance Metrics
 
@@ -42,10 +42,10 @@ Progress: [████████████░░░░░░░░] 67% (6/
 | 13. API Integration | 3 | 16min | 5.3min |
 | 14. WhisperX Foundation | 3 | 8min | 2.7min |
 | 15. Orchestrator Simplification | 3 | 9min | 3min |
-| 16. Interface Verification | ? | - | - |
+| 16. Interface Verification | 2/3 | 2min | 1min |
 
 **Recent Trend:**
-- Last 3 plans: 4min (15-01), 2min (15-02), 3min (15-03)
+- Last 3 plans: 2min (15-02), 3min (15-03), 2min (16-02)
 - Trend: Consistent fast execution pace
 
 *Updated after each plan completion*
@@ -104,6 +104,8 @@ Recent decisions affecting current work:
 - v2.7: CLI passes model size to WhisperXPipeline constructor
 - v2.7: Worker falls back to plain transcription on AuthenticationError (not hard failure)
 - v2.7: Unit tests use WhisperXSegment instead of AlignedSegment for fixtures
+- v2.7: E2E API tests use real audio file uploads from assets/ directory
+- v2.7: Mock repository.create with side_effect=lambda job: job for job inspection
 
 ### Pending Todos
 
@@ -116,6 +118,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 15-03-PLAN.md (Phase 15 complete)
+Stopped at: Completed 16-02-PLAN.md (E2E API diarization tests)
 Resume file: None
-Next step: Execute Phase 16 (Interface Verification)
+Next step: Execute 16-03-PLAN.md (CLI verification tests if exists, or phase complete)
