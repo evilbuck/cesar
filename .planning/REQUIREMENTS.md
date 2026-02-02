@@ -45,24 +45,24 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WX-01 | TBD | Pending |
-| WX-02 | TBD | Pending |
-| WX-03 | TBD | Pending |
-| WX-04 | TBD | Pending |
-| WX-05 | TBD | Pending |
-| WX-06 | TBD | Pending |
-| WX-07 | TBD | Pending |
-| WX-08 | TBD | Pending |
-| WX-09 | TBD | Pending |
-| WX-10 | TBD | Pending |
-| WX-11 | TBD | Pending |
-| WX-12 | TBD | Pending |
+| WX-01 | Phase 14: WhisperX Foundation | Pending |
+| WX-02 | Phase 14: WhisperX Foundation | Pending |
+| WX-03 | Phase 15: Orchestrator Simplification | Pending |
+| WX-04 | Phase 15: Orchestrator Simplification | Pending |
+| WX-05 | Phase 14: WhisperX Foundation | Pending |
+| WX-06 | Phase 16: Interface Verification | Pending |
+| WX-07 | Phase 16: Interface Verification | Pending |
+| WX-08 | Phase 15: Orchestrator Simplification | Pending |
+| WX-09 | Phase 15: Orchestrator Simplification | Pending |
+| WX-10 | Phase 16: Interface Verification | Pending |
+| WX-11 | Phase 16: Interface Verification | Pending |
+| WX-12 | Phase 16: Interface Verification | Pending |
 
 **Coverage:**
 - v2.3 requirements: 12 total
-- Mapped to phases: 0/12 (pending roadmap)
-- Unmapped: 12
+- Mapped to phases: 12/12
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-01 after initial definition*
+*Last updated: 2026-02-01 after roadmap creation*

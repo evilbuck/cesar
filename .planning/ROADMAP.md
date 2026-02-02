@@ -2,15 +2,16 @@
 
 ## Milestones
 
-- ✅ **v1.0 Package & CLI** - Phase 1 (shipped 2026-01-23)
-- ✅ **v2.0 API** - Phases 2-5 (shipped 2026-01-23)
-- ✅ **v2.1 YouTube Transcription** - Phases 6-8 (shipped 2026-02-01)
-- ✅ **v2.2 Speaker Identification** - Phases 9-13 (shipped 2026-02-01)
+- **v1.0 Package & CLI** - Phase 1 (shipped 2026-01-23)
+- **v2.0 API** - Phases 2-5 (shipped 2026-01-23)
+- **v2.1 YouTube Transcription** - Phases 6-8 (shipped 2026-02-01)
+- **v2.2 Speaker Identification** - Phases 9-13 (shipped 2026-02-01)
+- **v2.3 WhisperX Migration** - Phases 14-16 (active)
 
 ## Phases
 
 <details>
-<summary>✅ v1.0 Package & CLI (Phase 1) - SHIPPED 2026-01-23</summary>
+<summary>v1.0 Package & CLI (Phase 1) - SHIPPED 2026-01-23</summary>
 
 ### Phase 1: Package & CLI
 **Goal**: Pipx-installable CLI tool with cesar transcribe command
@@ -24,7 +25,7 @@ Plans:
 </details>
 
 <details>
-<summary>✅ v2.0 API (Phases 2-5) - SHIPPED 2026-01-23</summary>
+<summary>v2.0 API (Phases 2-5) - SHIPPED 2026-01-23</summary>
 
 ### Phase 2: Database & Jobs
 **Goal**: SQLite job persistence with async repository
@@ -60,7 +61,7 @@ Plans:
 </details>
 
 <details>
-<summary>✅ v2.1 YouTube Transcription (Phases 6-8) - SHIPPED 2026-02-01</summary>
+<summary>v2.1 YouTube Transcription (Phases 6-8) - SHIPPED 2026-02-01</summary>
 
 ### Phase 6: YouTube Download
 **Goal**: Extract audio from YouTube videos with yt-dlp
@@ -90,7 +91,7 @@ Plans:
 </details>
 
 <details>
-<summary>✅ v2.2 Speaker Identification (Phases 9-13) - SHIPPED 2026-02-01</summary>
+<summary>v2.2 Speaker Identification (Phases 9-13) - SHIPPED 2026-02-01</summary>
 
 **Milestone Goal:** Add speaker diarization to transcripts with configurable defaults
 
@@ -174,10 +175,53 @@ Plans:
 
 </details>
 
+<details open>
+<summary>v2.3 WhisperX Migration (Phases 14-16) - ACTIVE</summary>
+
+**Milestone Goal:** Replace pyannote diarization with WhisperX unified pipeline for better alignment and simpler architecture
+
+### Phase 14: WhisperX Foundation
+**Goal**: Install WhisperX and create wrapper module for unified pipeline
+**Depends on**: Nothing (fresh foundation replacing pyannote)
+**Requirements**: WX-01, WX-02, WX-05
+**Success Criteria** (what must be TRUE):
+  1. whisperx package installs successfully with compatible torch versions
+  2. WhisperX model loads and transcribes audio files
+  3. wav2vec2 alignment produces word-level timestamps
+  4. Diarization pipeline assigns speakers to words
+  5. Unit tests verify each pipeline stage in isolation
+**Plans**: TBD during plan-phase
+
+### Phase 15: Orchestrator Simplification
+**Goal**: Replace existing pipeline with WhisperX unified approach
+**Depends on**: Phase 14 (WhisperX wrapper must exist)
+**Requirements**: WX-03, WX-04, WX-08, WX-09
+**Success Criteria** (what must be TRUE):
+  1. timestamp_aligner.py is deleted from codebase
+  2. orchestrator.py uses WhisperX pipeline instead of separate components
+  3. Markdown output format matches existing format (speaker labels, timestamps)
+  4. DiarizationError and AuthenticationError exceptions work unchanged
+  5. Fallback to plain transcription works when diarization fails
+**Plans**: TBD during plan-phase
+
+### Phase 16: Interface Verification
+**Goal**: Validate all CLI and API interfaces work unchanged with new backend
+**Depends on**: Phase 15 (orchestrator must be updated first)
+**Requirements**: WX-06, WX-07, WX-10, WX-11, WX-12
+**Success Criteria** (what must be TRUE):
+  1. CLI --diarize flag produces speaker-labeled output (no interface changes)
+  2. API diarize parameter produces speaker-labeled response (no interface changes)
+  3. All existing diarization unit tests pass (with updated mocks)
+  4. E2E CLI test: `cesar transcribe --diarize <file>` produces correct Markdown
+  5. E2E API test: POST /transcribe with diarize=true produces correct response
+**Plans**: TBD during plan-phase
+
+</details>
+
 ## Progress
 
 **Execution Order:**
-Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
+Phases execute in numeric order: 14 -> 15 -> 16
 
 | Phase | Milestone | Plans Complete | Status | Completed |
 |-------|-----------|----------------|--------|-----------|
@@ -194,3 +238,6 @@ Phases execute in numeric order: 9 → 10 → 11 → 12 → 13
 | 11. Orchestration & Formatting | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 12. CLI Integration | v2.2 | 1/1 | Complete | 2026-02-01 |
 | 13. API Integration | v2.2 | 3/3 | Complete | 2026-02-01 |
+| 14. WhisperX Foundation | v2.3 | 0/? | Pending | — |
+| 15. Orchestrator Simplification | v2.3 | 0/? | Pending | — |
+| 16. Interface Verification | v2.3 | 0/? | Pending | — |
