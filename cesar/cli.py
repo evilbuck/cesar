@@ -30,7 +30,8 @@ from cesar.config import (
 from cesar.transcriber import AudioTranscriber
 from cesar.utils import format_time, estimate_processing_time
 from cesar.orchestrator import TranscriptionOrchestrator, OrchestrationResult
-from cesar.diarization import SpeakerDiarizer, DiarizationError
+from cesar.diarization import DiarizationError, AuthenticationError
+from cesar.whisperx_wrapper import WhisperXPipeline
 from cesar.youtube_handler import (
     is_youtube_url,
     download_youtube_audio,
@@ -443,20 +444,16 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
         if not quiet:
             console.print(f"[green]Output path validated:[/green] {output}")
 
-        # Create diarizer if diarization enabled and token available
-        diarizer = None
+        # Create pipeline if diarization enabled
+        pipeline = None
         if diarize:
             hf_token = get_hf_token(config)
-            if hf_token or Path.home().joinpath('.cache/huggingface/token').exists():
-                # SpeakerDiarizer only accepts hf_token (and optional model_name)
-                # min/max_speakers are passed to orchestrate(), not constructor
-                diarizer = SpeakerDiarizer(hf_token=hf_token)
-            else:
-                if not quiet:
-                    console.print(
-                        "[yellow]Note: Diarization enabled but no HuggingFace token found. "
-                        "Set HF_TOKEN env var or add hf_token to config file.[/yellow]"
-                    )
+            # WhisperXPipeline handles token resolution internally (env, cache)
+            # Create pipeline with model size passed through
+            pipeline = WhisperXPipeline(
+                model_name=model,
+                hf_token=hf_token
+            )
 
         # Set up progress tracking
         progress_tracker = ProgressTracker(show_progress=not quiet)
@@ -468,11 +465,11 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
         transcription_start_time = time.time()
 
         with progress_tracker:
-            if diarize and diarizer is not None:
+            if diarize and pipeline is not None:
                 # Use orchestrator for diarized transcription
                 orchestrator = TranscriptionOrchestrator(
-                    transcriber=transcriber,
-                    diarizer=diarizer
+                    pipeline=pipeline,
+                    transcriber=transcriber  # Kept for fallback when diarization fails
                 )
 
                 # Pass min/max_speakers from config to orchestrate()
@@ -560,6 +557,18 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
         error_msg = "Transcription interrupted by user"
         console.print(f"\n[yellow]{error_msg}[/yellow]")
         click.echo(error_msg, err=True)
+        return 1
+    except AuthenticationError as e:
+        # HuggingFace authentication failed - show helpful guidance
+        error_msg = str(e)
+        console.print(f"[red]Authentication Error:[/red] {error_msg}")
+        click.echo(f"Authentication Error: {error_msg}", err=True)
+        return 1
+    except DiarizationError as e:
+        # Diarization failed but orchestrator couldn't fall back (no transcriber)
+        error_msg = str(e)
+        console.print(f"[red]Speaker detection failed:[/red] {error_msg}")
+        click.echo(f"Speaker detection failed: {error_msg}", err=True)
         return 1
     except Exception as e:
         error_msg = f"Unexpected error: {e}"
