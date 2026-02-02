@@ -1088,6 +1088,109 @@ class TestDiarizationFileUploadEndpoint(unittest.TestCase):
         self.assertTrue(resp_data["diarize"])
 
 
+class TestTranscribeEndpointDiarizationE2E(unittest.TestCase):
+    """E2E tests for POST /transcribe diarization parameters using real audio files.
+
+    Validates API interface preservation (WX-07) and E2E API behavior (WX-12)
+    after WhisperX migration. Uses real audio file uploads to test job creation.
+    """
+
+    def setUp(self):
+        """Set up test client with mocked dependencies."""
+        # Create mocks for repository and worker
+        self.mock_repo = MagicMock()
+        self.mock_repo.connect = AsyncMock()
+        self.mock_repo.close = AsyncMock()
+        self.mock_repo.get = AsyncMock()
+        self.mock_repo.list_all = AsyncMock(return_value=[])
+        # Use side_effect to return the job passed to create
+        self.mock_repo.create = AsyncMock(side_effect=lambda job: job)
+        self.mock_repo.update = AsyncMock()
+
+        self.mock_worker = MagicMock()
+        self.mock_worker.run = AsyncMock()
+        self.mock_worker.shutdown = AsyncMock()
+
+        # Patch the imports in server module
+        self.repo_patcher = patch("cesar.api.server.JobRepository")
+        self.worker_patcher = patch("cesar.api.server.BackgroundWorker")
+
+        self.mock_repo_class = self.repo_patcher.start()
+        self.mock_worker_class = self.worker_patcher.start()
+
+        self.mock_repo_class.return_value = self.mock_repo
+        self.mock_worker_class.return_value = self.mock_worker
+
+        # Import app after patching
+        from cesar.api.server import app
+
+        self.app = app
+        # Use context manager to ensure lifespan runs
+        self._client_cm = TestClient(app)
+        self.client = self._client_cm.__enter__()
+
+        # Path to real audio file for E2E tests
+        self.audio_file_path = Path(__file__).parent.parent / "assets" / "testing speech audio file.m4a"
+
+    def tearDown(self):
+        """Stop all patches and close client."""
+        self._client_cm.__exit__(None, None, None)
+        self.repo_patcher.stop()
+        self.worker_patcher.stop()
+
+    def test_api_transcribe_diarize_parameter_creates_job(self):
+        """POST /transcribe with diarize=true creates job with diarization enabled."""
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"model": "base", "diarize": "true"}
+
+            response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertIn("id", resp_data)
+        self.assertTrue(resp_data["diarize"])
+
+        # Verify repository.create was called with job that has diarize=True
+        self.mock_repo.create.assert_called_once()
+        created_job = self.mock_repo.create.call_args[0][0]
+        self.assertTrue(created_job.diarize)
+
+    def test_api_transcribe_diarize_false_parameter(self):
+        """POST /transcribe with diarize=false creates job with diarize=False."""
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"model": "base", "diarize": "false"}
+
+            response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertFalse(resp_data["diarize"])
+
+        # Verify repository.create was called with job that has diarize=False
+        self.mock_repo.create.assert_called_once()
+        created_job = self.mock_repo.create.call_args[0][0]
+        self.assertFalse(created_job.diarize)
+
+    def test_api_transcribe_diarize_default_true(self):
+        """POST /transcribe without diarize parameter defaults to True."""
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            # No diarize parameter - should default to True
+
+            response = self.client.post("/transcribe", files=files)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertTrue(resp_data["diarize"])
+
+        # Verify repository.create was called with job that has diarize=True (default)
+        self.mock_repo.create.assert_called_once()
+        created_job = self.mock_repo.create.call_args[0][0]
+        self.assertTrue(created_job.diarize)
+
+
 class TestRetryEndpoint(unittest.TestCase):
     """Tests for POST /jobs/{job_id}/retry endpoint."""
 
