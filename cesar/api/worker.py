@@ -15,7 +15,8 @@ from typing import Dict, Optional
 from cesar.api.models import JobStatus
 from cesar.api.repository import JobRepository
 from cesar.config import CesarConfig
-from cesar.diarization import SpeakerDiarizer, DiarizationError, AuthenticationError
+from cesar.diarization import DiarizationError, AuthenticationError
+from cesar.whisperx_wrapper import WhisperXPipeline
 from cesar.orchestrator import TranscriptionOrchestrator
 from cesar.transcriber import AudioTranscriber
 from cesar.youtube_handler import (
@@ -379,32 +380,17 @@ class BackgroundWorker:
                     "speaker_count": None
                 }
 
-            # Diarization requested - check for HF token
+            # Diarization requested - create pipeline and orchestrator
+            # WhisperXPipeline handles token resolution internally (env, cache)
             hf_token = self._get_hf_token()
-            if not hf_token:
-                # No HF token available - run transcription only, report partial
-                result = transcriber.transcribe_file(audio_path, str(temp_output_path))
-
-                with open(temp_output_path, 'r', encoding='utf-8') as f:
-                    text = f.read()
-
-                return {
-                    "text": text,
-                    "language": result.get("language", "unknown"),
-                    "diarization_succeeded": False,
-                    "diarization_error_code": "hf_token_required",
-                    "diarization_error": (
-                        "HuggingFace token required for speaker diarization. "
-                        "Set hf_token in config or HF_TOKEN environment variable."
-                    )
-                }
-
-            # Create diarizer and orchestrator
             try:
-                diarizer = SpeakerDiarizer(hf_token=hf_token)
+                pipeline = WhisperXPipeline(
+                    model_name=model_size,
+                    hf_token=hf_token
+                )
                 orchestrator = TranscriptionOrchestrator(
-                    transcriber=transcriber,
-                    diarizer=diarizer
+                    pipeline=pipeline,
+                    transcriber=transcriber  # Kept for fallback when diarization fails
                 )
 
                 # Run orchestration
@@ -420,6 +406,16 @@ class BackgroundWorker:
                 with open(orch_result.output_path, 'r', encoding='utf-8') as f:
                     text = f.read()
 
+                # Check if diarization failed (orchestrator fell back to plain)
+                if not orch_result.diarization_succeeded:
+                    return {
+                        "text": text,
+                        "language": "unknown",
+                        "diarization_succeeded": False,
+                        "diarization_error_code": "diarization_failed",
+                        "diarization_error": "Speaker detection failed during processing"
+                    }
+
                 return {
                     "text": text,
                     "language": "unknown",  # orchestrator doesn't return language
@@ -428,8 +424,9 @@ class BackgroundWorker:
                 }
 
             except AuthenticationError as e:
-                # HF token invalid - run transcription only
+                # HF token invalid or missing - fall back to plain transcription
                 logger.warning(f"HuggingFace authentication failed: {e}")
+                logger.info("Transcription succeeded, diarization failed. Falling back to plain transcript.")
                 result = transcriber.transcribe_file(audio_path, str(temp_output_path))
 
                 with open(temp_output_path, 'r', encoding='utf-8') as f:
@@ -440,22 +437,6 @@ class BackgroundWorker:
                     "language": result.get("language", "unknown"),
                     "diarization_succeeded": False,
                     "diarization_error_code": "hf_token_invalid",
-                    "diarization_error": str(e)
-                }
-
-            except DiarizationError as e:
-                # Generic diarization failure - run transcription only
-                logger.warning(f"Diarization failed: {e}")
-                result = transcriber.transcribe_file(audio_path, str(temp_output_path))
-
-                with open(temp_output_path, 'r', encoding='utf-8') as f:
-                    text = f.read()
-
-                return {
-                    "text": text,
-                    "language": result.get("language", "unknown"),
-                    "diarization_succeeded": False,
-                    "diarization_error_code": "diarization_failed",
                     "diarization_error": str(e)
                 }
 
