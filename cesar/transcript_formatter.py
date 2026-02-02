@@ -3,11 +3,26 @@ Markdown transcript formatter with speaker labels.
 
 Formats aligned transcription segments into clean Markdown output with
 speaker headers, timestamps, and metadata.
+
+Accepts any segment with start, end, speaker, text attributes
+(WhisperXSegment, AlignedSegment, etc.) via duck typing.
 """
 from datetime import datetime
-from typing import List
+from typing import List, Any
 
-from cesar.timestamp_aligner import AlignedSegment, format_timestamp
+
+def format_timestamp(seconds: float) -> str:
+    """Format seconds as MM:SS.d (decisecond precision).
+
+    Args:
+        seconds: Time in seconds
+
+    Returns:
+        Formatted string like "01:23.4"
+    """
+    minutes = int(seconds // 60)
+    secs = seconds % 60
+    return f"{minutes:02d}:{secs:04.1f}"
 
 
 class MarkdownTranscriptFormatter:
@@ -30,11 +45,14 @@ class MarkdownTranscriptFormatter:
         self.duration = duration
         self.min_segment_duration = min_segment_duration
 
-    def format(self, segments: List[AlignedSegment]) -> str:
-        """Format aligned segments into Markdown transcript.
+    def format(self, segments: List[Any]) -> str:
+        """Format segments into Markdown transcript.
+
+        Accepts any segment with start, end, speaker, text attributes
+        (WhisperXSegment, AlignedSegment, etc.) via duck typing.
 
         Args:
-            segments: List of aligned segments with speaker labels
+            segments: List of segments with speaker labels
 
         Returns:
             Formatted Markdown string with speaker headers and timestamps
@@ -73,7 +91,7 @@ class MarkdownTranscriptFormatter:
 
         return header
 
-    def _format_segments(self, segments: List[AlignedSegment]) -> str:
+    def _format_segments(self, segments: List[Any]) -> str:
         """Format segments with speaker headers and timestamps."""
         if not segments:
             return ""

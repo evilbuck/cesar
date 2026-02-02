@@ -4,11 +4,19 @@ Core audio transcription functionality using faster-whisper
 import os
 import time
 import subprocess
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Optional, Callable, Dict, Any
 
 from cesar.device_detection import OptimalConfiguration, setup_environment
-from cesar.timestamp_aligner import TranscriptionSegment
+
+
+@dataclass
+class TranscriptionSegment:
+    """Segment from Whisper transcription."""
+    start: float
+    end: float
+    text: str
 
 
 class AudioTranscriber:
