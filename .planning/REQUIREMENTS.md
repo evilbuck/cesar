@@ -17,16 +17,16 @@ Requirements for WhisperX migration milestone. Replaces pyannote diarization wit
 
 ### Interface Preservation
 
-- [ ] **WX-06**: CLI --diarize flag works unchanged
-- [ ] **WX-07**: API diarize parameter works unchanged
+- [x] **WX-06**: CLI --diarize flag works unchanged
+- [x] **WX-07**: API diarize parameter works unchanged
 - [x] **WX-08**: Markdown output format preserved (speaker labels, timestamps)
 - [x] **WX-09**: Error handling interfaces preserved (DiarizationError, AuthenticationError)
 
 ### Quality
 
-- [ ] **WX-10**: All existing diarization tests pass (with mock updates)
-- [ ] **WX-11**: E2E test: CLI transcription with diarization produces correct output
-- [ ] **WX-12**: E2E test: API job with diarization produces correct response
+- [x] **WX-10**: All existing diarization tests pass (with mock updates)
+- [x] **WX-11**: E2E test: CLI transcription with diarization produces correct output
+- [x] **WX-12**: E2E test: API job with diarization produces correct response
 
 ## Out of Scope
 
@@ -50,13 +50,13 @@ Which phases cover which requirements. Updated during roadmap creation.
 | WX-03 | Phase 15: Orchestrator Simplification | Complete |
 | WX-04 | Phase 15: Orchestrator Simplification | Complete |
 | WX-05 | Phase 14: WhisperX Foundation | Complete |
-| WX-06 | Phase 16: Interface Verification | Pending |
-| WX-07 | Phase 16: Interface Verification | Pending |
+| WX-06 | Phase 16: Interface Verification | Complete |
+| WX-07 | Phase 16: Interface Verification | Complete |
 | WX-08 | Phase 15: Orchestrator Simplification | Complete |
 | WX-09 | Phase 15: Orchestrator Simplification | Complete |
-| WX-10 | Phase 16: Interface Verification | Pending |
-| WX-11 | Phase 16: Interface Verification | Pending |
-| WX-12 | Phase 16: Interface Verification | Pending |
+| WX-10 | Phase 16: Interface Verification | Complete |
+| WX-11 | Phase 16: Interface Verification | Complete |
+| WX-12 | Phase 16: Interface Verification | Complete |
 
 **Coverage:**
 - v2.3 requirements: 12 total
@@ -65,4 +65,4 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 ---
 *Requirements defined: 2026-02-01*
-*Last updated: 2026-02-01 after roadmap creation*
+*Last updated: 2026-02-02 after Phase 16 completion*
