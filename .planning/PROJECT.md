@@ -24,15 +24,15 @@ Transcribe audio to text anywhere, offline, with a single command or API call â€
 
 **Tech stack:** Python 3.10+, Click, Rich, faster-whisper, WhisperX, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn, yt-dlp
 
-## Next Milestone Goals
+## Current Milestone: v2.4 Idempotent Processing
 
-Ready to start next milestone with `/gsd:new-milestone`:
+**Goal:** Enable resumable, cacheable transcription pipelines where intermediate artifacts persist on failure and identical inputs skip reprocessing.
 
-**Potential v2.4 features:**
-- Performance optimization (batch processing, model caching)
-- Output format options (SRT/VTT subtitles)
-- Model selection via API
-- Language specification parameter
+**Target features:**
+- Artifact caching at each pipeline stage (~/.cache/cesar/)
+- Smart cache keys (source-based with optional time-step for URL freshness)
+- Resume on failure (retry from failure point, not from scratch)
+- Cache controls (--no-cache to force reprocess, --cache-info for status)
 
 ## Requirements
 
@@ -144,4 +144,4 @@ Ready to start next milestone with `/gsd:new-milestone`:
 | Video ID in error messages | Identification without URL clutter | âœ“ Good |
 
 ---
-*Last updated: 2026-02-02 after v2.3 milestone completion*
+*Last updated: 2026-02-02 after v2.4 milestone start*

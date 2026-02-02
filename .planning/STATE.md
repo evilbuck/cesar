@@ -9,12 +9,12 @@ See: .planning/PROJECT.md (updated 2026-02-02)
 
 ## Current Position
 
-Phase: None active
-Plan: None active
-Status: Ready to plan
-Last activity: 2026-02-02 — v2.3 milestone complete
+Phase: Not started (researching)
+Plan: —
+Status: Researching domain ecosystem
+Last activity: 2026-02-02 — Milestone v2.4 started
 
-Progress: Milestone v2.3 shipped, awaiting /gsd:new-milestone
+Progress: Research phase for idempotent processing
 
 ## Performance Metrics
 
