@@ -568,6 +568,155 @@ Thank you for listening.
                 # (transcription phase messages, completion message, etc.)
                 self.assertIn('Transcription completed', result.output)
 
+    def test_cli_diarize_fallback_on_auth_error(self):
+        """Test CLI completes with fallback when diarization fails with auth error."""
+        from cesar.orchestrator import OrchestrationResult
+        from cesar.diarization import AuthenticationError
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path = temp_path / "test_audio.m4a"
+            output_path = temp_path / "output.txt"  # Falls back to .txt
+
+            # Copy real audio file
+            shutil.copy(self.real_audio_path, audio_path)
+
+            # Create mock result with diarization failure (fallback occurred)
+            mock_result = OrchestrationResult(
+                output_path=output_path,
+                speakers_detected=0,  # No speakers detected due to fallback
+                audio_duration=11.1,
+                transcription_time=1.5,
+                diarization_time=None,  # Diarization didn't complete
+                formatting_time=0.1,
+                diarization_succeeded=False  # Fallback indicator
+            )
+
+            # Create plain text output (fallback result)
+            output_path.write_text("Hello and welcome to the test.\nThank you for listening.\n")
+
+            # Mock orchestrator to return fallback result
+            with patch('cesar.cli.TranscriptionOrchestrator') as mock_orch_cls, \
+                 patch('cesar.cli.WhisperXPipeline'):
+                mock_orch = MagicMock()
+                mock_orch.orchestrate.return_value = mock_result
+                mock_orch_cls.return_value = mock_orch
+
+                # Invoke CLI with diarization enabled (will fallback)
+                result = self.runner.invoke(cli, [
+                    'transcribe',
+                    str(audio_path),
+                    '-o', str(output_path),
+                    '--diarize',
+                    '--quiet'
+                ])
+
+                # Verify CLI completes with exit_code 0 (fallback succeeded)
+                self.assertEqual(result.exit_code, 0, f"CLI failed: {result.output}")
+
+                # Verify output file exists
+                self.assertTrue(output_path.exists(), "Output file not created")
+
+    def test_cli_no_diarize_produces_plain_text(self):
+        """Test CLI with --no-diarize produces plain text output."""
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path = temp_path / "test_audio.m4a"
+            output_path = temp_path / "output.txt"
+
+            # Copy real audio file
+            shutil.copy(self.real_audio_path, audio_path)
+
+            # Create plain text output
+            plain_content = "Hello and welcome to the test.\nThank you for listening.\n"
+            output_path.write_text(plain_content)
+
+            # Mock AudioTranscriber for non-diarization path
+            with patch('cesar.cli.AudioTranscriber') as mock_transcriber_cls:
+                mock_transcriber = MagicMock()
+                mock_transcriber.get_audio_duration.return_value = 11.1
+                mock_transcriber.validate_output_path.return_value = None
+                mock_transcriber.transcribe_file.return_value = {
+                    'language': 'en',
+                    'language_probability': 0.99,
+                    'audio_duration': 11.1,
+                    'processing_time': 1.5,
+                    'speed_ratio': 7.4,
+                    'segment_count': 2,
+                    'output_path': str(output_path)
+                }
+                mock_transcriber_cls.return_value = mock_transcriber
+
+                # Invoke with --no-diarize flag
+                result = self.runner.invoke(cli, [
+                    'transcribe',
+                    str(audio_path),
+                    '-o', str(output_path),
+                    '--no-diarize',
+                    '--quiet'
+                ])
+
+                # Verify exit code is success
+                self.assertEqual(result.exit_code, 0, f"CLI failed: {result.output}")
+
+                # Verify output file has .txt extension
+                self.assertEqual(output_path.suffix, '.txt')
+
+                # Verify file content does NOT contain speaker headers
+                content = output_path.read_text()
+                self.assertNotIn('### Speaker', content, "Plain text should not have speaker headers")
+
+    def test_cli_diarize_with_model_size_option(self):
+        """Test CLI --diarize with --model option passes model size correctly."""
+        from cesar.orchestrator import OrchestrationResult
+
+        with tempfile.TemporaryDirectory() as temp_dir:
+            temp_path = Path(temp_dir)
+            audio_path = temp_path / "test_audio.m4a"
+            output_path = temp_path / "output.md"
+
+            # Copy real audio file
+            shutil.copy(self.real_audio_path, audio_path)
+
+            # Create mock result
+            mock_result = OrchestrationResult(
+                output_path=output_path,
+                speakers_detected=2,
+                audio_duration=11.1,
+                transcription_time=2.0,  # Slightly longer for small model
+                diarization_time=0.8,
+                formatting_time=0.1,
+                diarization_succeeded=True
+            )
+
+            # Create output file
+            output_path.write_text("### Speaker 1\n[00:00.0]\nHello.\n")
+
+            # Mock at orchestrator level and track WhisperXPipeline instantiation
+            with patch('cesar.cli.TranscriptionOrchestrator') as mock_orch_cls, \
+                 patch('cesar.cli.WhisperXPipeline') as mock_pipeline_cls:
+                mock_orch = MagicMock()
+                mock_orch.orchestrate.return_value = mock_result
+                mock_orch_cls.return_value = mock_orch
+
+                # Invoke with --model small option
+                result = self.runner.invoke(cli, [
+                    'transcribe',
+                    str(audio_path),
+                    '-o', str(output_path),
+                    '--diarize',
+                    '--model', 'small',
+                    '--quiet'
+                ])
+
+                # Verify exit code is success
+                self.assertEqual(result.exit_code, 0, f"CLI failed: {result.output}")
+
+                # Verify WhisperXPipeline was called with model_name='small'
+                mock_pipeline_cls.assert_called_once()
+                call_kwargs = mock_pipeline_cls.call_args[1]
+                self.assertEqual(call_kwargs['model_name'], 'small')
+
 
 if __name__ == "__main__":
     unittest.main()
