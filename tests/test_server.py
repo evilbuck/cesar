@@ -1190,6 +1190,111 @@ class TestTranscribeEndpointDiarizationE2E(unittest.TestCase):
         created_job = self.mock_repo.create.call_args[0][0]
         self.assertTrue(created_job.diarize)
 
+    def test_api_transcribe_response_schema(self):
+        """POST /transcribe response has all required fields with correct types."""
+        import re
+
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"diarize": "true"}
+
+            response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+
+        # Verify job_id is UUID format
+        self.assertIn("id", resp_data)
+        uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+        self.assertRegex(resp_data["id"], uuid_pattern)
+
+        # Verify status is string
+        self.assertIn("status", resp_data)
+        self.assertIsInstance(resp_data["status"], str)
+        self.assertEqual(resp_data["status"], "queued")
+
+        # Verify diarize is boolean true
+        self.assertIn("diarize", resp_data)
+        self.assertIsInstance(resp_data["diarize"], bool)
+        self.assertTrue(resp_data["diarize"])
+
+        # Verify model_size is string
+        self.assertIn("model_size", resp_data)
+        self.assertIsInstance(resp_data["model_size"], str)
+
+        # Verify created_at is ISO format string
+        self.assertIn("created_at", resp_data)
+        self.assertIsInstance(resp_data["created_at"], str)
+        # ISO format: YYYY-MM-DDTHH:MM:SS
+        iso_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}')
+        self.assertRegex(resp_data["created_at"], iso_pattern)
+
+    def test_api_job_status_includes_diarize_field(self):
+        """GET /jobs/{job_id} response includes diarize field matching creation request."""
+        from cesar.api.models import Job, JobStatus
+
+        # First create a job via POST
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"diarize": "true", "min_speakers": "2", "max_speakers": "4"}
+
+            create_response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(create_response.status_code, 202)
+        created_job_data = create_response.json()
+        job_id = created_job_data["id"]
+
+        # Mock repository.get to return the job
+        mock_job = Job(
+            id=job_id,
+            audio_path="/tmp/test.m4a",
+            model_size="base",
+            status=JobStatus.QUEUED,
+            diarize=True,
+            min_speakers=2,
+            max_speakers=4,
+        )
+        self.mock_repo.get.return_value = mock_job
+
+        # GET the job status
+        get_response = self.client.get(f"/jobs/{job_id}")
+
+        self.assertEqual(get_response.status_code, 200)
+        job_data = get_response.json()
+
+        # Verify diarize field is present and matches creation request
+        self.assertIn("diarize", job_data)
+        self.assertTrue(job_data["diarize"])
+
+        # Verify speaker range options are preserved
+        self.assertIn("min_speakers", job_data)
+        self.assertEqual(job_data["min_speakers"], 2)
+        self.assertIn("max_speakers", job_data)
+        self.assertEqual(job_data["max_speakers"], 4)
+
+    def test_api_transcribe_with_speaker_options(self):
+        """POST /transcribe with speaker options creates job with preserved values."""
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"diarize": "true", "min_speakers": "2", "max_speakers": "4"}
+
+            response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+
+        # Verify speaker options in response
+        self.assertTrue(resp_data["diarize"])
+        self.assertEqual(resp_data["min_speakers"], 2)
+        self.assertEqual(resp_data["max_speakers"], 4)
+
+        # Verify repository.create was called with correct speaker options
+        self.mock_repo.create.assert_called_once()
+        created_job = self.mock_repo.create.call_args[0][0]
+        self.assertTrue(created_job.diarize)
+        self.assertEqual(created_job.min_speakers, 2)
+        self.assertEqual(created_job.max_speakers, 4)
+
 
 class TestRetryEndpoint(unittest.TestCase):
     """Tests for POST /jobs/{job_id}/retry endpoint."""
