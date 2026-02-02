@@ -224,7 +224,12 @@ Plans:
   3. All existing diarization unit tests pass (with updated mocks)
   4. E2E CLI test: `cesar transcribe --diarize <file>` produces correct Markdown
   5. E2E API test: POST /transcribe with diarize=true produces correct response
-**Plans**: TBD during plan-phase
+**Plans**: 3 plans in 2 waves
+
+Plans:
+- [ ] 16-01-PLAN.md — E2E CLI diarization tests
+- [ ] 16-02-PLAN.md — E2E API diarization tests
+- [ ] 16-03-PLAN.md — Full test suite verification
 
 </details>
 
@@ -250,4 +255,4 @@ Phases execute in numeric order: 14 -> 15 -> 16
 | 13. API Integration | v2.2 | 3/3 | Complete | 2026-02-01 |
 | 14. WhisperX Foundation | v2.3 | 3/3 | Complete | 2026-02-02 |
 | 15. Orchestrator Simplification | v2.3 | 3/3 | Complete | 2026-02-02 |
-| 16. Interface Verification | v2.3 | 0/? | Pending | - |
+| 16. Interface Verification | v2.3 | 0/3 | Pending | - |
