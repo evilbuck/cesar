@@ -9,19 +9,19 @@ See: .planning/PROJECT.md (updated 2026-02-01)
 
 ## Current Position
 
-Phase: 14 - WhisperX Foundation
-Plan: 03 of 3 complete
+Phase: 15 - Orchestrator Simplification
+Plan: 01 of 1 complete
 Status: Phase complete
-Last activity: 2026-02-02 — Completed 14-03-PLAN.md (Unit tests for WhisperX wrapper)
+Last activity: 2026-02-02 — Completed 15-01-PLAN.md (Orchestrator simplified to use WhisperXPipeline)
 
-Progress: [██████░░░░░░░░░░░░░░] 33% (3/9 plans in v2.3)
+Progress: [████████░░░░░░░░░░░░] 44% (4/9 plans in v2.3)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 28
+- Total plans completed: 29
 - Average duration: ~3.0 min/plan (v2.1-v2.7)
-- Total execution time: ~64 min total
+- Total execution time: ~68 min total
 
 **By Phase:**
 
@@ -41,11 +41,11 @@ Progress: [██████░░░░░░░░░░░░░░] 33% (3/
 | 12. CLI Integration | 1 | 4min | 4min |
 | 13. API Integration | 3 | 16min | 5.3min |
 | 14. WhisperX Foundation | 3 | 8min | 2.7min |
-| 15. Orchestrator Simplification | ? | - | - |
+| 15. Orchestrator Simplification | 1 | 4min | 4min |
 | 16. Interface Verification | ? | - | - |
 
 **Recent Trend:**
-- Last 3 plans: 4min (14-01), 2min (14-02), 2min (14-03)
+- Last 3 plans: 2min (14-02), 2min (14-03), 4min (15-01)
 - Trend: Consistent fast execution pace
 
 *Updated after each plan completion*
@@ -98,6 +98,9 @@ Recent decisions affecting current work:
 - v2.7: WhisperXSegment compatible with AlignedSegment for formatter reuse
 - v2.7: Lazy model loading in WhisperXPipeline (defers to first use)
 - v2.7: Extensive whisperx mocking for fast CI (no model downloads needed)
+- v2.7: Formatter uses duck typing (List[Any]) for WhisperXSegment compatibility
+- v2.7: TranscriptionSegment moved to transcriber.py (co-located with producer)
+- v2.7: format_timestamp moved to transcript_formatter.py (co-located with consumer)
 
 ### Pending Todos
 
@@ -110,6 +113,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-02
-Stopped at: Completed 14-03-PLAN.md (Phase 14 complete)
+Stopped at: Completed 15-01-PLAN.md (Phase 15 complete)
 Resume file: None
-Next step: Execute Phase 15 (Orchestrator Simplification)
+Next step: Execute Phase 16 (Interface Verification)
