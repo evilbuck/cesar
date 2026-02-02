@@ -9,18 +9,18 @@ Requirements for WhisperX migration milestone. Replaces pyannote diarization wit
 
 ### Core Migration
 
-- [ ] **WX-01**: Replace pyannote.audio diarization with WhisperX pipeline
-- [ ] **WX-02**: Use wav2vec2 alignment for word-level timestamps
-- [ ] **WX-03**: Delete timestamp_aligner.py module (WhisperX handles alignment)
-- [ ] **WX-04**: Simplify orchestrator to use WhisperX unified pipeline
-- [ ] **WX-05**: Update dependencies (add whisperx, update torch versions)
+- [x] **WX-01**: Replace pyannote.audio diarization with WhisperX pipeline
+- [x] **WX-02**: Use wav2vec2 alignment for word-level timestamps
+- [x] **WX-03**: Delete timestamp_aligner.py module (WhisperX handles alignment)
+- [x] **WX-04**: Simplify orchestrator to use WhisperX unified pipeline
+- [x] **WX-05**: Update dependencies (add whisperx, update torch versions)
 
 ### Interface Preservation
 
 - [ ] **WX-06**: CLI --diarize flag works unchanged
 - [ ] **WX-07**: API diarize parameter works unchanged
-- [ ] **WX-08**: Markdown output format preserved (speaker labels, timestamps)
-- [ ] **WX-09**: Error handling interfaces preserved (DiarizationError, AuthenticationError)
+- [x] **WX-08**: Markdown output format preserved (speaker labels, timestamps)
+- [x] **WX-09**: Error handling interfaces preserved (DiarizationError, AuthenticationError)
 
 ### Quality
 
@@ -45,15 +45,15 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| WX-01 | Phase 14: WhisperX Foundation | Pending |
-| WX-02 | Phase 14: WhisperX Foundation | Pending |
-| WX-03 | Phase 15: Orchestrator Simplification | Pending |
-| WX-04 | Phase 15: Orchestrator Simplification | Pending |
-| WX-05 | Phase 14: WhisperX Foundation | Pending |
+| WX-01 | Phase 14: WhisperX Foundation | Complete |
+| WX-02 | Phase 14: WhisperX Foundation | Complete |
+| WX-03 | Phase 15: Orchestrator Simplification | Complete |
+| WX-04 | Phase 15: Orchestrator Simplification | Complete |
+| WX-05 | Phase 14: WhisperX Foundation | Complete |
 | WX-06 | Phase 16: Interface Verification | Pending |
 | WX-07 | Phase 16: Interface Verification | Pending |
-| WX-08 | Phase 15: Orchestrator Simplification | Pending |
-| WX-09 | Phase 15: Orchestrator Simplification | Pending |
+| WX-08 | Phase 15: Orchestrator Simplification | Complete |
+| WX-09 | Phase 15: Orchestrator Simplification | Complete |
 | WX-10 | Phase 16: Interface Verification | Pending |
 | WX-11 | Phase 16: Interface Verification | Pending |
 | WX-12 | Phase 16: Interface Verification | Pending |

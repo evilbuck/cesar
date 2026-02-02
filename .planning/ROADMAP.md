@@ -210,9 +210,9 @@ Plans:
 **Plans**: 3 plans in 3 waves
 
 Plans:
-- [ ] 15-01-PLAN.md — Core module updates (orchestrator, diarization, delete timestamp_aligner)
-- [ ] 15-02-PLAN.md — CLI and API worker integration with WhisperXPipeline
-- [ ] 15-03-PLAN.md — Test updates for new architecture
+- [x] 15-01: Core module updates (orchestrator, diarization, delete timestamp_aligner)
+- [x] 15-02: CLI and API worker integration with WhisperXPipeline
+- [x] 15-03: Test updates for new architecture
 
 ### Phase 16: Interface Verification
 **Goal**: Validate all CLI and API interfaces work unchanged with new backend
@@ -249,5 +249,5 @@ Phases execute in numeric order: 14 -> 15 -> 16
 | 12. CLI Integration | v2.2 | 1/1 | Complete | 2026-02-01 |
 | 13. API Integration | v2.2 | 3/3 | Complete | 2026-02-01 |
 | 14. WhisperX Foundation | v2.3 | 3/3 | Complete | 2026-02-02 |
-| 15. Orchestrator Simplification | v2.3 | 0/3 | Pending | - |
+| 15. Orchestrator Simplification | v2.3 | 3/3 | Complete | 2026-02-02 |
 | 16. Interface Verification | v2.3 | 0/? | Pending | - |
