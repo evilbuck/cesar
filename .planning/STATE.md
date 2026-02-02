@@ -5,16 +5,16 @@
 See: .planning/PROJECT.md (updated 2026-02-01)
 
 **Core value:** Transcribe audio to text anywhere, offline, with a single command or API call — no cloud services, no API keys, no ongoing costs
-**Current focus:** v2.2 Speaker Identification milestone complete
+**Current focus:** v2.3 WhisperX Migration — replace pyannote with WhisperX
 
 ## Current Position
 
-Phase: 13 of 13 (API Integration)
-Plan: Complete (3/3)
-Status: Phase verified, milestone complete
-Last activity: 2026-02-01 — Phase 13 execution complete
+Phase: Not started (defining requirements)
+Plan: —
+Status: Defining requirements
+Last activity: 2026-02-01 — Milestone v2.3 started
 
-Progress: [████████████████████] 100% (27 of 27 total plans complete)
+Progress: [░░░░░░░░░░░░░░░░░░░░] 0% (0 plans complete)
 
 ## Performance Metrics
 
@@ -102,6 +102,6 @@ None.
 ## Session Continuity
 
 Last session: 2026-02-01
-Stopped at: v2.2 Speaker Identification milestone complete
+Stopped at: Starting v2.3 WhisperX Migration milestone
 Resume file: None
-Next step: `/gsd:audit-milestone` or `/gsd:complete-milestone`
+Next step: Define requirements, then `/gsd:plan-phase 14`

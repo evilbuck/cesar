@@ -10,29 +10,30 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 
 ## Current State
 
-**Shipped:** v2.1 YouTube Transcription (2026-02-01)
+**Shipped:** v2.2 Speaker Identification (2026-02-01)
+- Speaker diarization via pyannote.audio with Markdown output
+- Configuration system with TOML support (~/.config/cesar/config.toml)
+- CLI --diarize flag and API diarize parameter
+- Works across all input sources (files, URLs, YouTube)
+- 19 requirements, 352 tests passing
+
+**Previous:** v2.1 YouTube Transcription (2026-02-01)
 - YouTube URL transcription via CLI and API
 - Download progress tracking with DOWNLOADING status
 - Granular error handling for YouTube-specific failures
-- 38 new files, 211 tests passing
 
-**Previous:** v2.0 API (2026-01-23)
-- HTTP API with async job queue via `cesar serve`
-- 6 REST endpoints: health, jobs list/get, transcribe (file upload + URL)
-- SQLite persistence with job recovery on crash
+**Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn, yt-dlp, pyannote.audio
 
-**Tech stack:** Python 3.10+, Click, Rich, faster-whisper, setuptools, FastAPI, Pydantic v2, aiosqlite, uvicorn, yt-dlp
+## Current Milestone: v2.3 WhisperX Migration
 
-## Current Milestone: v2.2 Speaker Identification
-
-**Goal:** Add speaker diarization to transcripts with configurable defaults
+**Goal:** Replace pyannote diarization with WhisperX for better alignment, simpler architecture, and stable dependencies
 
 **Target features:**
-- Speaker identification (diarization) for audio transcripts
-- Markdown output format with inline speaker labels
-- Configuration system for CLI and API defaults
-- Works across all input sources (files, URLs, YouTube)
-- Offline-first with downloadable models
+- WhisperX unified pipeline (transcription + wav2vec2 alignment + diarization)
+- Better word-level alignment via wav2vec2 (superior to current temporal intersection)
+- Stable torch/torchvision dependency management
+- Simplified codebase (delete timestamp_aligner.py, simplify orchestrator)
+- Maintain all existing CLI/API interfaces unchanged
 
 ## Requirements
 
@@ -71,16 +72,22 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 - ✓ FFmpeg validation with helpful error messages — v2.1
 - ✓ Health endpoint reports YouTube capability — v2.1
 - ✓ YouTube documentation in README — v2.1
+- ✓ Speaker identification (diarization) in transcripts — v2.2
+- ✓ Markdown output with speaker labels and timestamps — v2.2
+- ✓ CLI configuration file support (~/.config/cesar/config.toml) — v2.2
+- ✓ API local configuration file support — v2.2
+- ✓ Configurable default for speaker identification — v2.2
+- ✓ Speaker ID works with all input sources (files, URLs, YouTube) — v2.2
+- ✓ Offline speaker identification models — v2.2
 
 ### Active
 
-- [ ] Speaker identification (diarization) in transcripts
-- [ ] Markdown output with speaker labels and timestamps
-- [ ] CLI configuration file support (~/.config/cesar/config.toml)
-- [ ] API local configuration file support
-- [ ] Configurable default for speaker identification
-- [ ] Speaker ID works with all input sources (files, URLs, YouTube)
-- [ ] Offline speaker identification models
+- [ ] Replace pyannote diarization with WhisperX unified pipeline
+- [ ] wav2vec2 alignment for better word-level timestamps
+- [ ] Stable torch/torchvision dependencies via WhisperX
+- [ ] Delete timestamp_aligner.py (WhisperX handles alignment internally)
+- [ ] Simplify orchestrator to use WhisperX pipeline
+- [ ] Maintain all existing CLI/API interfaces unchanged
 
 ### Out of Scope
 
@@ -137,4 +144,4 @@ Transcribe audio to text anywhere, offline, with a single command or API call �
 | Video ID in error messages | Identification without URL clutter | ✓ Good |
 
 ---
-*Last updated: 2026-02-01 after starting v2.2 Speaker Identification milestone*
+*Last updated: 2026-02-01 after starting v2.3 WhisperX Migration milestone*
