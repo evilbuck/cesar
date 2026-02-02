@@ -3,8 +3,8 @@ Tests for transcript formatting with speaker labels.
 """
 import unittest
 from datetime import datetime
-from cesar.timestamp_aligner import AlignedSegment, format_timestamp
-from cesar.transcript_formatter import MarkdownTranscriptFormatter
+from cesar.whisperx_wrapper import WhisperXSegment
+from cesar.transcript_formatter import MarkdownTranscriptFormatter, format_timestamp
 
 
 class TestMarkdownTranscriptFormatter(unittest.TestCase):
@@ -19,7 +19,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(
+            WhisperXSegment(
                 start=0.0,
                 end=15.3,
                 speaker="SPEAKER_00",
@@ -45,8 +45,8 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="First part."),
-            AlignedSegment(start=10.5, end=20.0, speaker="SPEAKER_00", text="Second part."),
+            WhisperXSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="First part."),
+            WhisperXSegment(start=10.5, end=20.0, speaker="SPEAKER_00", text="Second part."),
         ]
 
         result = formatter.format(segments)
@@ -69,9 +69,9 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Speaker one."),
-            AlignedSegment(start=10.0, end=20.0, speaker="SPEAKER_01", text="Speaker two."),
-            AlignedSegment(start=20.0, end=30.0, speaker="SPEAKER_02", text="Speaker three."),
+            WhisperXSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Speaker one."),
+            WhisperXSegment(start=10.0, end=20.0, speaker="SPEAKER_01", text="Speaker two."),
+            WhisperXSegment(start=20.0, end=30.0, speaker="SPEAKER_02", text="Speaker three."),
         ]
 
         result = formatter.format(segments)
@@ -94,7 +94,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(
+            WhisperXSegment(
                 start=0.0,
                 end=5.0,
                 speaker="Multiple speakers",
@@ -119,8 +119,8 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=0.5, speaker="SPEAKER_00", text="Too short."),
-            AlignedSegment(start=1.0, end=5.0, speaker="SPEAKER_00", text="Long enough."),
+            WhisperXSegment(start=0.0, end=0.5, speaker="SPEAKER_00", text="Too short."),
+            WhisperXSegment(start=1.0, end=5.0, speaker="SPEAKER_00", text="Long enough."),
         ]
 
         result = formatter.format(segments)
@@ -139,7 +139,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Text.")
+            WhisperXSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Text.")
         ]
 
         result = formatter.format(segments)
@@ -156,7 +156,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Text.")
+            WhisperXSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Text.")
         ]
 
         result = formatter.format(segments)
@@ -173,7 +173,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Text.")
+            WhisperXSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Text.")
         ]
 
         result = formatter.format(segments)
@@ -191,7 +191,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Text.")
+            WhisperXSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Text.")
         ]
 
         result = formatter.format(segments)
@@ -210,8 +210,8 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Zero."),
-            AlignedSegment(start=10.0, end=20.0, speaker="SPEAKER_01", text="One."),
+            WhisperXSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="Zero."),
+            WhisperXSegment(start=10.0, end=20.0, speaker="SPEAKER_01", text="One."),
         ]
 
         result = formatter.format(segments)
@@ -232,7 +232,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=5.0, speaker="UNKNOWN", text="Unknown speaker."),
+            WhisperXSegment(start=0.0, end=5.0, speaker="UNKNOWN", text="Unknown speaker."),
         ]
 
         result = formatter.format(segments)
@@ -275,7 +275,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=65.7, end=89.4, speaker="SPEAKER_00", text="Text."),
+            WhisperXSegment(start=65.7, end=89.4, speaker="SPEAKER_00", text="Text."),
         ]
 
         result = formatter.format(segments)
@@ -294,7 +294,7 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
 
         text = "This is a test! With punctuation, special chars: @#$% and numbers 123."
         segments = [
-            AlignedSegment(start=0.0, end=5.0, speaker="SPEAKER_00", text=text),
+            WhisperXSegment(start=0.0, end=5.0, speaker="SPEAKER_00", text=text),
         ]
 
         result = formatter.format(segments)
@@ -311,10 +311,10 @@ class TestMarkdownTranscriptFormatter(unittest.TestCase):
         )
 
         segments = [
-            AlignedSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="First."),
-            AlignedSegment(start=10.0, end=20.0, speaker="SPEAKER_01", text="Second."),
-            AlignedSegment(start=20.0, end=30.0, speaker="SPEAKER_00", text="First again."),
-            AlignedSegment(start=30.0, end=40.0, speaker="SPEAKER_01", text="Second again."),
+            WhisperXSegment(start=0.0, end=10.0, speaker="SPEAKER_00", text="First."),
+            WhisperXSegment(start=10.0, end=20.0, speaker="SPEAKER_01", text="Second."),
+            WhisperXSegment(start=20.0, end=30.0, speaker="SPEAKER_00", text="First again."),
+            WhisperXSegment(start=30.0, end=40.0, speaker="SPEAKER_01", text="Second again."),
         ]
 
         result = formatter.format(segments)
