@@ -1,171 +1,309 @@
 # Project Research Summary
 
-**Project:** Cesar v2.2 - Speaker Identification & Configuration Systems
-**Domain:** Offline audio transcription with speaker diarization
-**Researched:** 2026-02-01
+**Project:** Cesar v2.4 Idempotent Processing
+**Domain:** Offline audio transcription with artifact caching
+**Researched:** 2026-02-02
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Adding speaker diarization to Cesar requires integrating two major capabilities: speaker identification via pyannote.audio and a configuration system via Pydantic Settings with TOML. The research confirms this is well-trodden ground with established patterns, but success depends on avoiding critical pitfalls around timestamp alignment, memory management, and config validation.
+Cesar v2.4 adds artifact caching and idempotent processing to a multi-stage audio transcription pipeline (Download → Transcription → Diarization → Formatting). Expert systems in this domain (Docker, npm, ffmpeg) use content-addressable storage with stage-level caching to enable resumption from failure points. The recommended approach extends Cesar's existing SQLite infrastructure rather than introducing new dependencies, using a hybrid storage model: SQLite BLOBs for small artifacts (<100KB) and filesystem for large artifacts (>=100KB).
 
-**The recommended approach:** Sequential processing (transcribe first, diarize second, align timestamps, format as Markdown) using pyannote.audio 3.1+ with exclusive speaker mode. Configuration loads at system boundaries (CLI per-invocation, API at lifespan startup) with Pydantic validation. Both systems integrate as optional enhancements to existing AudioTranscriber without modification to core transcription logic.
+The architecture centers on a CacheManager component that integrates with the existing TranscriptionOrchestrator, providing transparent caching without breaking backward compatibility. Cache keys use SHA-256 content hashing to ensure deterministic lookup, while atomic write operations prevent corruption during failures. For URL-based sources, time-step functions (15-minute windows) balance freshness with cache efficiency.
 
-**Key risks:** (1) Timestamp alignment between Whisper and pyannote segments can fail catastrophically if done manually — use pyannote's `exclusive=True` flag and temporal overlap algorithm, never manual reconciliation. (2) Dual model loading causes OOM crashes on target 8GB RAM systems — implement phased processing with sequential model loading/unloading and INT8 quantization. (3) Config validation happening during execution wastes user time — validate entire config at startup with Pydantic, fail fast with actionable errors.
+Critical risks center on cache corruption from partial writes, stale content from URLs, and concurrent access race conditions. Prevention requires atomic file operations (temp-then-rename pattern), file-based locking for concurrent writes, and careful cache invalidation strategies. Testing must include failure injection (kill signals, disk exhaustion) to validate resilience patterns.
 
 ## Key Findings
 
 ### Recommended Stack
 
-pyannote.audio 3.1+ is the clear winner for offline speaker diarization in 2026. It runs fully offline after model download, uses pure PyTorch (no onnxruntime conflicts with faster-whisper), delivers excellent accuracy (DER ~11-19%), and has proven integration patterns with Whisper-family models. For configuration, Pydantic Settings 2.x provides type-safe settings with native TOML support, while tomli-w handles TOML writing (stdlib tomllib is read-only).
+Research revealed that extending Cesar's existing SQLite (aiosqlite) infrastructure is superior to introducing new caching libraries. SQLite is 35% faster than filesystem storage for small BLOBs (<100KB), handles concurrent access via WAL mode, and integrates seamlessly with existing job persistence patterns. The hybrid approach leverages both SQLite and filesystem storage, choosing the optimal storage backend based on artifact size.
 
 **Core technologies:**
-- **pyannote.audio 3.1+**: Speaker diarization pipeline — best open-source option, runs offline, pure PyTorch, proven Whisper integration
-- **pydantic-settings 2.x**: Type-safe config loader — native TOML/env/secrets support, integrates with existing Pydantic v2 stack
-- **tomli-w 1.2+**: TOML file writer — complements stdlib tomllib (read-only), simple API matching json.dump pattern
-- **torch 2.0+**: Deep learning framework — already in project (v2.7.1), required by pyannote, GPU-optional
+- **aiosqlite 0.22.0+** (existing): Cache metadata and small artifacts — already in stack, proven reliable, 35% faster than filesystem for small BLOBs
+- **stdlib hashlib** (built-in): SHA-256 content hashing — zero dependencies, formally verified HACL* implementation, excellent performance
+- **stdlib pathlib/tempfile** (built-in): Cache directory management and atomic writes — cross-platform, type-safe, native atomic operations via os.replace()
+- **filelock 3.20.3** (optional): Cross-platform file locking for concurrent writes — defer until needed, SQLite WAL handles read concurrency
 
-**Critical version note:** pyannote.audio 3.0.0 had onnxruntime conflicts with faster-whisper. Use 3.1+ (pure PyTorch).
+**Total new dependencies: 0** for MVP (uses stdlib + existing aiosqlite). Optional filelock only if concurrent writes to filesystem artifacts become necessary.
 
 ### Expected Features
 
+Caching in CLI tools follows predictable patterns established by Docker, npm, pip, and other developer tools. Users expect transparent caching with manual override capabilities, automatic cache directory creation, and reasonable defaults for cache expiration and size management.
+
 **Must have (table stakes):**
-- Basic speaker identification with auto-detection — core diarization capability users expect
-- Speaker labels in output (Markdown format) — users need to know who spoke when
-- Timestamps per speaker segment — track when each speaker talked
-- Offline operation after model download — matches project's core offline-first value
-- Config file in standard location (~/.config/cesar/config.toml) — XDG convention
-- CLI args override config — CLI should always have final say
-- Progress feedback — diarization is slow (2-4 hours on CPU), users need visibility
+- Skip reprocessing identical inputs — hash-based cache keys prevent redundant work
+- --no-cache flag — universal override pattern users expect
+- Cache location visibility — users need to know where cache lives for manual cleanup
+- Automatic cache directory creation — user shouldn't create ~/.cache/cesar/ manually
+- Cache survives crashes — atomic writes ensure cache integrity after failures
+- Reasonable cache expiration — URL content changes over time, needs time-step function
 
 **Should have (competitive):**
-- Fully offline diarization with no cloud dependencies — differentiates from cloud API competitors
-- Markdown output format with speaker formatting — clean, documentation-friendly transcripts
-- Unified config for CLI + API — single config file works for both interfaces
-- YouTube + diarization — speaker ID works on YouTube videos (unique capability)
-- Speaker count hints (--min-speakers/--max-speakers) — improves accuracy when user knows bounds
+- --cache-info flag — inspect cache without side effects (location, size, hit/miss stats)
+- Resume from failure point — save minutes on retry by skipping successful stages
+- Time-step function for URLs — smart freshness with 15-minute windows, not second-level precision
+- Smart extension correction — auto-fix .txt to .md when diarize=True (already implemented in v2.2)
+- Verbose logging — cache hit/miss visibility for debugging
 
 **Defer (v2+):**
-- Real-time diarization — requires streaming architecture, 10x effort, defer to v3.0+
-- Speaker name recognition — requires voice enrollment, not general-purpose, manual post-processing instead
-- SRT/VTT export with speakers — non-standard format, validate demand first
-- Picovoice Falcon integration — 100x faster CPU diarization, defer until CPU-only use case validated
+- cesar cache clean — manual cache purge command (users can delete ~/.cache/cesar/ manually)
+- --invalidate-stage — granular invalidation (--no-cache covers 80% of use cases)
+- cesar cache warm — pre-download models (models auto-download on first use already)
+- --dry-run — show cache behavior without execution (debugging feature, not core)
+- LRU eviction — automatic cache size management (complexity, manual cleanup sufficient for v2.4)
 
 ### Architecture Approach
 
-The architecture adds two major components without modifying existing AudioTranscriber: (1) TranscriptionOrchestrator coordinates optional processing steps (transcription → diarization → alignment → formatting), (2) ConfigManager loads and validates hierarchical config (defaults → file → env → CLI args). Sequential processing (not parallel) simplifies implementation and targets 8GB RAM systems. Models are lazy-loaded with explicit lifecycle management (load, use, unload, load next).
+The recommended architecture introduces a CacheManager component that integrates with the existing TranscriptionOrchestrator while maintaining backward compatibility. The orchestrator checks cache before each expensive pipeline stage (transcription, diarization), uses cached results when available, and stores successful outputs for future use. This preserves Cesar's existing graceful degradation patterns (diarization failure falls back to cached transcription).
 
 **Major components:**
-1. **ConfigManager** — Load, merge, validate config hierarchy; Pydantic BaseSettings with custom source priority
-2. **TranscriptionOrchestrator** — Coordinate transcription → diarization → alignment → formatting; wraps AudioTranscriber + SpeakerIdentifier
-3. **SpeakerIdentifier** — Run pyannote.audio diarization, extract speaker segments; pyannote Pipeline API
-4. **SegmentAligner** — Match transcription segments to speaker timestamps; temporal overlap algorithm
-5. **MarkdownFormatter** — Format segments with speaker labels (SPEAKER_00, SPEAKER_01); unified formatter for both plain and diarized output
+1. **CacheManager** — content-addressable storage with hybrid backend (SQLite + filesystem), SHA-256 key generation, atomic write operations, and cache metadata tracking
+2. **TranscriptionOrchestrator (modified)** — accepts optional cache_manager parameter, checks cache before each stage, stores successful outputs, preserves existing behavior when cache_manager is None
+3. **BackgroundWorker (modified)** — passes cache_manager to orchestrator, handles retry scenarios with cache invalidation, tracks cache usage metrics in job metadata
+4. **Cache Repository** — extends existing JobRepository patterns, shares database file (~/.local/share/cesar/jobs.db), follows established aiosqlite async/await patterns
+
+**Storage structure:**
+```
+~/.cache/cesar/artifacts/
+  ├── transcription/{hash[:2]}/{hash}.json  (SQLite BLOB if <100KB)
+  ├── diarization/{hash[:2]}/{hash}.json    (SQLite BLOB if <100KB)
+  └── audio/{hash[:2]}/{hash}.m4a           (filesystem, always >100KB)
+
+~/.local/share/cesar/jobs.db
+  └── cache_entries table (metadata for all cached artifacts)
+```
 
 ### Critical Pitfalls
 
-1. **Timestamp reconciliation failure** — Whisper and pyannote have independent timing systems; manual timestamp merging causes 80% misattribution by end of file. **Avoid:** Use pyannote's `exclusive=True` flag, process in order (diarize → transcribe with context), never manually reconcile timestamps. Implement alignment verification tests with multi-speaker audio.
+Research identified 11 pitfalls from production systems (yt-dlp, ffmpeg, pip), with 5 rated as critical.
 
-2. **Offline model download race conditions** — Both faster-whisper and pyannote download models simultaneously on first run; parallel downloads corrupt cache, partial downloads not re-downloaded on retry. **Avoid:** Implement explicit `cesar --install-models` command with sequential downloads, verify with checksums, store installation state in `~/.cache/cesar/installed-models.json`.
+1. **Cache corruption from partial writes** — System crashes during cache write leave partial/corrupted files that appear valid but contain invalid data. Prevention: write-to-temp-then-rename pattern using stdlib os.replace() for atomic operations, validate before caching, cleanup orphaned .tmp files on startup.
 
-3. **Speaker count detection failures** — pyannote auto-detection splits one speaker into multiple labels or merges different speakers; setting `max_speakers=10` when only 2 speakers exist reduces accuracy. **Avoid:** Expose `num_speakers` and `max_speakers` as explicit config options, default to `num_speakers=2` for podcast use case, validate detected count against expected range.
+2. **Cache invalidation failures (stale URL content)** — YouTube videos updated/replaced but cache returns old transcription because URL-based keys don't detect content changes. Prevention: time-step function for URLs (15-minute buckets), HTTP conditional requests (ETag/Last-Modified), configurable TTL defaults (24 hours for URLs, infinite for local files).
 
-4. **Config validation happens too late** — Validation occurs during execution (model path when loading model, speaker count when starting diarization); 45-minute job discovers invalid config at the end. **Avoid:** Use Pydantic models with strict type checking, validate entire config at startup, provide `cesar config validate` command.
+3. **Concurrent access race conditions** — Multiple API requests for same URL run simultaneously, all check cache (miss), all start download, all write to same cache key causing corruption. Prevention: file-based locking with filelock library (timeout + fallback), in-process request coalescing for single-instance API, cache directory sharding to reduce contention.
 
-5. **Memory explosion from dual model loading** — faster-whisper + pyannote simultaneously consume 6-8GB RAM; OOM crashes on 2-hour podcasts with 8GB systems. **Avoid:** Phased processing with explicit model lifecycle (load Whisper, transcribe, unload, load pyannote, diarize, unload), use INT8 quantization on CPU, implement memory budget checks at startup.
+4. **Disk space exhaustion** — Cache grows unbounded until disk fills, system crashes, user confusion about hidden cache. Prevention: size-based eviction (10GB default limit), LRU eviction when exceeding threshold, cleanup commands (cesar cache info/clean), aggressive temp file deletion.
+
+5. **Hash collision in cache keys** — Different inputs hash to same cache key, wrong transcription returned. Prevention: use SHA-256 (not MD5), never truncate hashes (use full 64 hex chars), include input type in cache key namespace, validate cache metadata on read.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure prioritizes configuration foundation before ML integration, then builds diarization core before exposing to users.
+Based on research, suggested phase structure follows dependency ordering: foundation before operations, basic operations before intermediate artifacts, intermediate artifacts before resume functionality, advanced features build on working cache.
 
-### Phase 1: Configuration System
-**Rationale:** Foundation for all new features; can ship independently; easier to test without ML models
-**Delivers:** Config loading with TOML support, Pydantic validation, hierarchical precedence
-**Addresses:** Config file support (FEATURES.md table stakes), validation errors for invalid config (FEATURES.md table stakes)
-**Avoids:** Config validation too late (PITFALLS.md #4)
+### Phase 1: Cache Foundation
+**Rationale:** Core infrastructure must exist before any caching operations. Atomic writes and content hashing are table stakes that prevent corruption from day one.
 
-### Phase 2: Speaker Diarization Core
-**Rationale:** Core logic independent of orchestration; establishes diarization API before integration; validates memory/performance characteristics on target hardware
-**Delivers:** SpeakerIdentifier class with pyannote integration, SegmentAligner with temporal overlap algorithm
-**Addresses:** Basic speaker identification (FEATURES.md table stakes), auto-detect speakers (FEATURES.md table stakes)
-**Avoids:** Timestamp reconciliation failure (PITFALLS.md #1), speaker count detection failures (PITFALLS.md #3), memory explosion (PITFALLS.md #5), offline model download issues (PITFALLS.md #2)
+**Delivers:**
+- CacheManager class with SHA-256 key generation
+- Hybrid storage decision logic (SQLite vs filesystem based on size)
+- Atomic write operations (temp-then-rename pattern)
+- Cache directory structure (~/.cache/cesar/artifacts/)
+- Cache metadata schema in SQLite
 
-### Phase 3: Orchestration & Formatting
-**Rationale:** Integrates Phase 1 + Phase 2 outputs; sequential pipeline design; unified output formatter prevents format drift
-**Delivers:** TranscriptionOrchestrator coordinating transcription → diarization → alignment, MarkdownFormatter for speaker-labeled output
-**Addresses:** Markdown output with speaker labels (FEATURES.md table stakes), timestamps per speaker (FEATURES.md table stakes)
-**Avoids:** Format inconsistency between plain and diarized output (PITFALLS.md #6)
+**Addresses:**
+- Must-have: automatic cache directory creation, cache survives crashes
+- Pitfall 1 (cache corruption): atomic writes prevent partial file corruption
+- Pitfall 5 (hash collisions): SHA-256 with full hashes guarantees uniqueness
 
-### Phase 4: CLI Integration
-**Rationale:** User-facing feature exposing all functionality; easiest to test manually; validates end-to-end flow
-**Delivers:** `--diarize` flag, speaker config options, progress display for diarization step, result display with speaker count
-**Addresses:** Diarization enable/disable flag (FEATURES.md MVP), progress feedback (FEATURES.md table stakes)
+**Avoids:**
+- Pitfall 1: Implementation includes atomic write-to-temp-then-rename from start
+- Pitfall 5: Use SHA-256, never MD5 or truncated hashes
 
-### Phase 5: API Integration
-**Rationale:** Parallel to CLI (can swap order); more complex due to async job queue; shares orchestrator with CLI
-**Delivers:** Speaker detection params in API endpoints, Job model updates, worker integration, API responses with speaker info
-**Addresses:** API speaker identification support, works with all input sources (FEATURES.md differentiators)
+**Research flag:** Standard patterns (well-documented content-addressable storage, skip deep research)
+
+### Phase 2: Orchestrator Integration
+**Rationale:** Cache infrastructure useless without pipeline integration. Transcription caching delivers immediate value (saves 2-5 minutes on cache hit).
+
+**Delivers:**
+- TranscriptionOrchestrator accepts optional cache_manager parameter
+- Transcription stage caching (check cache, use if hit, store on success)
+- Diarization stage caching (separate cache key, preserves transcription on failure)
+- keep_intermediate flag integration (already exists in v2.4)
+
+**Uses:**
+- CacheManager from Phase 1
+- Existing WhisperXPipeline and AudioTranscriber interfaces
+- Existing fallback patterns (diarization failure preserves cached transcription)
+
+**Implements:**
+- Stage-level cache keys (hash of audio + model_size for transcription, hash of audio + speakers for diarization)
+- Partial failure artifact preservation (cache transcription immediately, attempt diarization, fallback if fails)
+
+**Addresses:**
+- Must-have: skip reprocessing identical inputs
+- Should-have: resume from failure point
+
+**Avoids:**
+- Pitfall 8 (incomplete metadata): include all processing options in cache key
+
+**Research flag:** Standard patterns (pipeline caching well-documented in GitLab CI/CD, Azure Pipelines)
+
+### Phase 3: CLI Cache Controls
+**Rationale:** Users need visibility and control over caching. Without --no-cache flag, users trapped with stale results. Without --cache-info, cache is invisible.
+
+**Delivers:**
+- --no-cache flag (force reprocess, bypass cache)
+- --cache-info flag (show cache location, size, hit/miss stats)
+- Verbose logging of cache hits/misses
+- Cache location documentation in README
+
+**Addresses:**
+- Must-have: --no-cache flag, cache location visibility
+- Should-have: --cache-info flag, verbose logging
+
+**Avoids:**
+- Pitfall 10 (poor observability): users know cache exists and how to manage it
+- Pitfall 11 (no override): --no-cache provides escape hatch
+
+**Research flag:** Standard patterns (Docker --no-cache, npm cache verify, pip cache info)
+
+### Phase 4: URL Freshness and Expiration
+**Rationale:** URL content changes over time. Without expiration, users get stale transcriptions. Time-step function balances freshness with cache efficiency.
+
+**Delivers:**
+- Time-step function for URLs (15-minute buckets by default)
+- Configurable cache TTL (default: 24 hours for URLs, infinite for local files)
+- HTTP conditional requests (ETag/Last-Modified checking)
+- YouTube-specific metadata validation
+
+**Uses:**
+- Cache metadata schema from Phase 1
+- Existing YouTubeHandler for download orchestration
+
+**Addresses:**
+- Must-have: reasonable cache expiration for URLs
+
+**Avoids:**
+- Pitfall 2 (stale URL content): time-step function + HTTP conditional requests
+- Anti-feature: per-second cache freshness causes cache thrashing
+
+**Research flag:** Needs research (HTTP conditional request patterns, YouTube API metadata)
+
+### Phase 5: API Worker Integration
+**Rationale:** Background worker processes most transcription jobs. Cache must work seamlessly in async context without blocking event loop.
+
+**Delivers:**
+- BackgroundWorker passes cache_manager to orchestrator
+- Retry scenarios with cache invalidation (user explicit retry clears cache)
+- Job metadata tracking (transcription_cached, diarization_cached, cache_hit_ratio)
+- asyncio.to_thread() for cache I/O in async context
+
+**Uses:**
+- CacheManager with thread-safe operations
+- Existing JobRepository for metadata persistence
+
+**Implements:**
+- Cache invalidation on explicit retry (clear all stage caches for job)
+- Cache metadata in Job model (optional analytics)
+
+**Addresses:**
+- Should-have: cache stats in health endpoint
+
+**Avoids:**
+- Pitfall 3 (concurrent access): file-based locking for multi-instance safety
+- Anti-pattern: synchronous cache I/O in async context (use asyncio.to_thread)
+
+**Research flag:** Standard patterns (async file I/O well-documented, filelock library examples)
+
+### Phase 6: Concurrent Access and Locking (Optional)
+**Rationale:** Only needed if multiple API instances share cache directory. Defer until needed, start with single-instance deployment.
+
+**Delivers:**
+- File-based locking with filelock library
+- In-memory request coalescing (cache stampede prevention)
+- Lock timeout + fallback to reprocess (no deadlocks)
+- Cleanup of orphaned lock files on startup
+
+**Uses:**
+- filelock 3.20.3 (first new dependency)
+- Cache directory structure with .lock files
+
+**Addresses:**
+- Should-have: concurrent cache safety for multi-instance API
+
+**Avoids:**
+- Pitfall 3 (race conditions): file locking prevents corrupted writes
+- Pitfall 6 (cache stampede): request coalescing prevents duplicate work
+
+**Research flag:** Needs research (filelock patterns, distributed locking strategies)
 
 ### Phase Ordering Rationale
 
-- **Config first:** Simplest component, no ML dependencies, foundation for feature flags and model selection
-- **Diarization core before integration:** Validates pyannote behavior, memory requirements, and alignment algorithms on real hardware before exposing to users
-- **Orchestration before interfaces:** Single implementation shared by CLI and API prevents duplication and format drift
-- **CLI before API:** Simpler testing, fewer moving parts, validates full pipeline before adding async complexity
-- **Dependencies:** Phase 1 is independent; Phase 2 depends on Phase 1 (config loading); Phases 3-5 depend on Phases 1-2
+- **Phase 1 → Phase 2:** Cache infrastructure must exist before orchestrator integration
+- **Phase 2 → Phase 3:** Working cache needed before CLI controls are useful
+- **Phase 3 → Phase 4:** Basic caching proven before adding URL complexity
+- **Phase 4 → Phase 5:** URL freshness logic needed before API worker (most API jobs use URLs)
+- **Phase 5 → Phase 6:** Single-instance API proven before multi-instance complexity
+- **Grouping:** Foundation (1), Core Features (2-3), Advanced Features (4-6)
+- **Pitfall avoidance:** Atomic writes in Phase 1 prevents corruption throughout, URL freshness in Phase 4 prevents stale content before heavy API usage
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 2 (Diarization Core):** Complex ML integration with memory/performance trade-offs — may need pyannote-specific research for optimization strategies
-- **Phase 3 (Orchestration):** Alignment algorithm tuning for edge cases (crosstalk, silence, short utterances) — may need research-phase for WhisperX patterns
+- **Phase 4:** HTTP conditional request patterns, ETag/Last-Modified handling, YouTube API metadata
+- **Phase 6:** Distributed file locking patterns, cache stampede prevention in distributed systems
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1 (Config):** Well-documented Pydantic Settings patterns, straightforward implementation
-- **Phase 4 (CLI):** Click framework expertise already in project, standard flag additions
-- **Phase 5 (API):** FastAPI expertise already in project, standard endpoint additions
+- **Phase 1:** Content-addressable storage well-documented (npm/cacache, Git, BuildStream)
+- **Phase 2:** Pipeline caching patterns established (GitLab CI/CD, Azure Pipelines, Google SRE)
+- **Phase 3:** CLI cache controls universal (Docker, npm, pip)
+- **Phase 5:** Async file I/O patterns well-documented (aiosqlite, asyncio.to_thread)
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | pyannote.audio 3.1+ and Pydantic Settings 2.x are well-documented, widely adopted, verified with official sources |
-| Features | HIGH | Table stakes and differentiators align with competitor analysis and user expectations from established tools |
-| Architecture | HIGH | Sequential processing pattern is proven (WhisperX, whisper-diarization), config injection is standard Pydantic pattern |
-| Pitfalls | HIGH | All critical pitfalls documented in real-world issue trackers (WhisperX #499, pyannote #1452) and practitioner blogs |
+| Stack | HIGH | SQLite performance verified with official benchmarks, hybrid approach proven in npm/cacache |
+| Features | HIGH | Feature expectations verified across Docker, npm, pip, yt-dlp, wget, rsync |
+| Architecture | HIGH | Content-addressable storage patterns established in Git, npm/cacache, BuildStream |
+| Pitfalls | HIGH | All pitfalls verified with real-world evidence from yt-dlp, ffmpeg, pip production issues |
 
 **Overall confidence:** HIGH
 
+Research findings based on official documentation (SQLite benchmarks, Python stdlib docs), production system behavior (Docker, npm, pip), and verified pitfalls from GitHub issues and technical blogs. The hybrid SQLite + filesystem approach is well-established (npm/cacache uses similar pattern). Content-addressable storage patterns are mature (Git, BuildStream, LLVM).
+
 ### Gaps to Address
 
-- **CPU vs GPU performance trade-offs:** Research documents 2-4 hours CPU processing for 1 hour audio but doesn't provide detailed profiling data for different audio characteristics (silence ratio, speaker overlap, background noise). Address during Phase 2 implementation with profiling on diverse sample audio.
+Minor areas requiring validation during implementation:
 
-- **Alignment algorithm edge cases:** Temporal overlap algorithm is standard practice, but handling of crosstalk, silence gaps, and very short utterances (<1s) needs validation during Phase 2. May require tuning threshold parameters or implementing confidence scoring.
+- **HTTP conditional request implementation:** Pattern is well-documented (MDN, Zuplo), but integration with yt-dlp/requests needs testing. Test with real YouTube URLs to ensure ETag/Last-Modified headers are present.
 
-- **Speaker count validation heuristics:** Research suggests validating detected count against expected range (2-4 for podcasts) but doesn't specify when to trust auto-detection vs. requiring manual override. Address during Phase 2 with testing on diverse speaker counts.
+- **Concurrent write performance:** File locking overhead unknown for Cesar's workload. Start without locking (Phase 1-5), measure concurrent request latency in Phase 6 before deciding on locking strategy.
 
-- **Config migration strategy:** Initial config schema will evolve as features are added. Research doesn't address backward compatibility for config files when schema changes. Address during Phase 1 with versioning strategy (config_version field, migration utilities).
+- **Cache size estimation:** Research suggests 10GB default limit, but actual Cesar usage patterns unknown. Monitor real-world cache growth during early adoption, adjust limit based on telemetry.
+
+- **SQLite BLOB size threshold:** Research suggests 100KB cutoff for SQLite vs filesystem. Validate with real Cesar transcription outputs (typical size: 10-50KB JSON) to confirm threshold is optimal.
+
+All gaps have clear resolution paths (testing, monitoring, tuning) and don't block MVP implementation.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- pyannote.audio GitHub (official) — Installation, offline usage, Python requirements
-- speaker-diarization-3.1 on Hugging Face (official) — Model requirements, usage instructions, offline capabilities
-- Pydantic Settings Documentation (official) — TOML support, validation patterns, settings hierarchy
-- Python TOML libraries (official) — tomllib, tomli-w, tomlkit comparison
-- WhisperX GitHub (reference implementation) — Integration patterns, alignment approaches, parallel vs. sequential processing
+- [SQLite: 35% Faster Than The Filesystem](https://sqlite.org/fasterthanfs.html) — Performance benchmarks for BLOB storage
+- [SQLite: Internal Versus External BLOBs](https://sqlite.org/intern-v-extern-blob.html) — Size threshold guidance (100KB)
+- [Python hashlib Documentation](https://docs.python.org/3/library/hashlib.html) — SHA-256 implementation details
+- [Python os.replace Function](https://zetcode.com/python/os-replace/) — Atomic file operations
+- [Docker Build Cache](https://docs.docker.com/build/cache/) — Cache invalidation patterns
+- [pip cache commands](https://pip.pypa.io/en/stable/cli/pip_cache/) — CLI cache management patterns
+- [npm cache verify/clean](https://docs.npmjs.com/cli/v8/commands/npm-cache/) — Cache inspection patterns
 
 ### Secondary (MEDIUM confidence)
-- Best Speaker Diarization Models Compared 2026 (brasstranscripts.com) — Pyannote 3.1 vs alternatives, accuracy comparison
-- Whisper Speaker Diarization: Python Tutorial 2026 (brasstranscripts.com) — Integration patterns, best practices
-- Whisper and Pyannote: The Ultimate Solution for Speech Transcription (scalastic.io) — Integration architecture, alignment approaches
-- pyannote.ai blog (STT Orchestration, Community-1 Release) — Advanced patterns, performance optimization
-- WhisperX Issue #499 (GitHub) — pyannote 3.0 performance regression, version compatibility
+- [GitHub: npm/cacache](https://github.com/npm/cacache) — Content-addressable storage implementation
+- [Prefect: Idempotent Data Pipelines](https://www.prefect.io/blog/the-importance-of-idempotent-data-pipelines-for-resilience) — Pipeline idempotency patterns
+- [yt-dlp Issue #7669](https://github.com/yt-dlp/yt-dlp/issues/7669) — Partial download failures
+- [Ben Boyter: Cache Eviction](https://boyter.org/posts/media-clipping-using-ffmpeg-with-cache-eviction-2-random-for-disk-caching-at-scale/) — Production ffmpeg caching
+- [Redis: Cache Invalidation](https://redis.io/glossary/cache-invalidation/) — Invalidation strategies
+- [GeeksforGeeks: Cache Invalidation Methods](https://www.geeksforgeeks.org/system-design/cache-invalidation-and-the-methods-to-invalidate-cache/) — Time-based, event-driven, version-based patterns
+- [Medium: File Conflicts in Multithreaded Python](https://medium.com/@aman.deep291098/avoiding-file-conflicts-in-multithreaded-python-programs-34f2888f4521) — File locking patterns
+- [GitLab CI/CD Caching](https://docs.gitlab.com/ci/caching/) — Cache key strategies
+- [Azure Pipelines Caching](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops) — Multi-stage cache patterns
 
 ### Tertiary (LOW confidence)
-- pyannote-whisper GitHub (reference only) — Alternative integration approach, not production-ready
-- Picovoice Falcon documentation — CPU-optimized alternative, not yet validated for this use case
+- [Medium: Cache Stampede](https://medium.com/@sonal.sadafal/cache-stampede-the-thundering-herd-problem-d31d579d93fd) — Thundering herd patterns (needs validation with Cesar workload)
+- [IOriver: Cache Warming](https://www.ioriver.io/terms/cache-warming) — Preloading strategies (likely not needed for Cesar)
 
 ---
-*Research completed: 2026-02-01*
+*Research completed: 2026-02-02*
 *Ready for roadmap: yes*
