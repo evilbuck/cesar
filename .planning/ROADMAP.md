@@ -190,12 +190,12 @@ Plans:
   3. wav2vec2 alignment produces word-level timestamps
   4. Diarization pipeline assigns speakers to words
   5. Unit tests verify each pipeline stage in isolation
-**Plans**: 3 plans
+**Plans**: 3 plans in 3 waves
 
 Plans:
-- [ ] 14-01-PLAN.md - Update dependencies (remove pyannote.audio, add whisperx)
-- [ ] 14-02-PLAN.md - Create WhisperXPipeline wrapper module
-- [ ] 14-03-PLAN.md - Unit tests for WhisperXPipeline
+- [x] 14-01: Update dependencies (remove pyannote.audio, add whisperx) [Wave 1]
+- [x] 14-02: Create WhisperXPipeline wrapper module [Wave 2]
+- [x] 14-03: Unit tests for WhisperXPipeline [Wave 3]
 
 ### Phase 15: Orchestrator Simplification
 **Goal**: Replace existing pipeline with WhisperX unified approach
@@ -243,6 +243,6 @@ Phases execute in numeric order: 14 -> 15 -> 16
 | 11. Orchestration & Formatting | v2.2 | 2/2 | Complete | 2026-02-01 |
 | 12. CLI Integration | v2.2 | 1/1 | Complete | 2026-02-01 |
 | 13. API Integration | v2.2 | 3/3 | Complete | 2026-02-01 |
-| 14. WhisperX Foundation | v2.3 | 0/3 | Pending | - |
+| 14. WhisperX Foundation | v2.3 | 3/3 | Complete | 2026-02-02 |
 | 15. Orchestrator Simplification | v2.3 | 0/? | Pending | - |
 | 16. Interface Verification | v2.3 | 0/? | Pending | - |
