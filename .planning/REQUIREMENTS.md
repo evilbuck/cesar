@@ -68,23 +68,23 @@ Which phases cover which requirements. Updated during roadmap creation.
 
 | Requirement | Phase | Status |
 |-------------|-------|--------|
-| CACHE-01 | TBD | Pending |
-| CACHE-02 | TBD | Pending |
-| CACHE-03 | TBD | Pending |
-| CACHE-04 | TBD | Pending |
-| DLOAD-01 | TBD | Pending |
-| DLOAD-02 | TBD | Pending |
-| DLOAD-03 | TBD | Pending |
-| DLOAD-04 | TBD | Pending |
-| DISK-01 | TBD | Pending |
-| DISK-02 | TBD | Pending |
-| DISK-03 | TBD | Pending |
+| CACHE-01 | Phase 17 | Pending |
+| CACHE-02 | Phase 17 | Pending |
+| CACHE-03 | Phase 18 | Pending |
+| CACHE-04 | Phase 18 | Pending |
+| DLOAD-01 | Phase 18 | Pending |
+| DLOAD-02 | Phase 18 | Pending |
+| DLOAD-03 | Phase 18 | Pending |
+| DLOAD-04 | Phase 18 | Pending |
+| DISK-01 | Phase 19 | Pending |
+| DISK-02 | Phase 19 | Pending |
+| DISK-03 | Phase 19 | Pending |
 
 **Coverage:**
 - v2.4 requirements: 11 total
-- Mapped to phases: 0
-- Unmapped: 11 (pending roadmap)
+- Mapped to phases: 11/11 (100%)
+- Unmapped: 0
 
 ---
 *Requirements defined: 2026-02-02*
-*Last updated: 2026-02-02 after initial definition*
+*Last updated: 2026-02-02 after roadmap creation*
