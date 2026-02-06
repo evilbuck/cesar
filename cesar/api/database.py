@@ -23,11 +23,22 @@ CREATE TABLE IF NOT EXISTS jobs (
     result_text TEXT,
     detected_language TEXT,
     error_message TEXT,
-    download_progress INTEGER CHECK(download_progress >= 0 AND download_progress <= 100)
+    download_progress INTEGER CHECK(download_progress >= 0 AND download_progress <= 100),
+    diarize INTEGER DEFAULT 1,
+    min_speakers INTEGER,
+    max_speakers INTEGER,
+    progress INTEGER CHECK(progress >= 0 AND progress <= 100),
+    progress_phase TEXT,
+    progress_phase_pct INTEGER CHECK(progress_phase_pct >= 0 AND progress_phase_pct <= 100),
+    speaker_count INTEGER CHECK(speaker_count >= 0),
+    diarized INTEGER,
+    diarization_error TEXT,
+    diarization_error_code TEXT
 );
 
 CREATE INDEX IF NOT EXISTS idx_jobs_status ON jobs(status);
 CREATE INDEX IF NOT EXISTS idx_jobs_created ON jobs(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_jobs_diarize ON jobs(diarize);
 """
 
 

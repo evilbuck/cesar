@@ -8,18 +8,24 @@ import asyncio
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
-from typing import List, Optional
+from typing import List, Optional, Tuple, Union
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi import Path as PathParam
 from fastapi.responses import JSONResponse
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from cesar.api.file_handler import download_from_url, save_upload_file
 from cesar.api.models import Job, JobStatus
 from cesar.api.repository import JobRepository
 from cesar.api.worker import BackgroundWorker
+from cesar.config import (
+    CesarConfig,
+    ConfigError,
+    load_config,
+    get_api_config_path,
+)
 from cesar.youtube_handler import YouTubeDownloadError, check_ffmpeg_available, is_youtube_url
 
 logger = logging.getLogger(__name__)
@@ -33,6 +39,7 @@ async def lifespan(app: FastAPI):
     """Manage server lifecycle: start worker on startup, cleanup on shutdown.
 
     This async context manager:
+    - Loads configuration from config.toml in current directory
     - Initializes JobRepository and connects to database
     - Creates and starts BackgroundWorker in a task
     - Stores components in app.state for endpoint access
@@ -41,6 +48,21 @@ async def lifespan(app: FastAPI):
     Args:
         app: FastAPI application instance
     """
+    # Load configuration
+    config_path = get_api_config_path()
+    try:
+        config = load_config(config_path)
+        if config_path.exists():
+            logger.info(f"Loaded config from {config_path}")
+        else:
+            logger.debug("No config file found, using defaults")
+    except ConfigError as e:
+        logger.error(f"Config error: {e}")
+        raise  # Let server fail to start on invalid config
+
+    # Store config in app.state for endpoint access (used in Phase 13)
+    app.state.config = config
+
     # Startup: initialize repository and worker
     db_path = getattr(app.state, "db_path", DEFAULT_DB_PATH)
 
@@ -61,7 +83,7 @@ async def lifespan(app: FastAPI):
             await repo.update(job)
 
     logger.info("Starting background worker")
-    worker = BackgroundWorker(repo)
+    worker = BackgroundWorker(repo, config=config)
     worker_task = asyncio.create_task(worker.run())
 
     # Store in app.state for endpoint access
@@ -190,6 +212,9 @@ async def list_jobs(status: Optional[str] = None):
 async def transcribe_file_upload(
     file: UploadFile,
     model: str = Form(default="base"),
+    diarize: bool = Form(default=True),
+    min_speakers: Optional[int] = Form(default=None),
+    max_speakers: Optional[int] = Form(default=None),
 ):
     """Upload audio file for transcription.
 
@@ -199,18 +224,59 @@ async def transcribe_file_upload(
     Args:
         file: Audio file to transcribe (mp3, wav, m4a, ogg, flac, aac, wma, webm)
         model: Whisper model size (tiny, base, small, medium, large)
+        diarize: Enable speaker diarization (default: True)
+        min_speakers: Minimum number of speakers to detect
+        max_speakers: Maximum number of speakers to detect
 
     Returns:
         Job: Created job with queued status
 
     Raises:
         HTTPException: 413 if file too large (max 100MB)
-        HTTPException: 400 if invalid file type
+        HTTPException: 400 if invalid file type or speaker range invalid
     """
+    # Validate speaker range at request time
+    if (min_speakers is not None and max_speakers is not None and
+        min_speakers > max_speakers):
+        raise HTTPException(
+            status_code=400,
+            detail=f"min_speakers ({min_speakers}) cannot exceed max_speakers ({max_speakers})"
+        )
+
     tmp_path = await save_upload_file(file)
-    job = Job(audio_path=tmp_path, model_size=model)
+    job = Job(
+        audio_path=tmp_path,
+        model_size=model,
+        diarize=diarize,
+        min_speakers=min_speakers,
+        max_speakers=max_speakers,
+    )
     await app.state.repo.create(job)
     return job
+
+
+class DiarizeOptions(BaseModel):
+    """Diarization options when using object form.
+
+    Allows fine-grained control over speaker diarization including
+    minimum and maximum speaker counts.
+    """
+
+    enabled: bool = True
+    min_speakers: Optional[int] = Field(default=None, ge=1)
+    max_speakers: Optional[int] = Field(default=None, ge=1)
+
+    @model_validator(mode='after')
+    def validate_speaker_range(self) -> 'DiarizeOptions':
+        """Validate min_speakers <= max_speakers when both are set."""
+        if (self.min_speakers is not None and
+            self.max_speakers is not None and
+            self.min_speakers > self.max_speakers):
+            raise ValueError(
+                f"min_speakers ({self.min_speakers}) cannot exceed "
+                f"max_speakers ({self.max_speakers})"
+            )
+        return self
 
 
 class TranscribeURLRequest(BaseModel):
@@ -218,6 +284,27 @@ class TranscribeURLRequest(BaseModel):
 
     url: str
     model: str = "base"
+    diarize: Union[bool, DiarizeOptions] = True
+
+    def get_diarize_enabled(self) -> bool:
+        """Get whether diarization is enabled.
+
+        Returns:
+            True if diarization is enabled, False otherwise
+        """
+        if isinstance(self.diarize, bool):
+            return self.diarize
+        return self.diarize.enabled
+
+    def get_speaker_range(self) -> Tuple[Optional[int], Optional[int]]:
+        """Get min/max speaker range for diarization.
+
+        Returns:
+            Tuple of (min_speakers, max_speakers), both may be None
+        """
+        if isinstance(self.diarize, bool):
+            return (None, None)
+        return (self.diarize.min_speakers, self.diarize.max_speakers)
 
 
 @app.post("/transcribe/url", response_model=Job, status_code=status.HTTP_202_ACCEPTED)
@@ -230,7 +317,7 @@ async def transcribe_from_url(request: TranscribeURLRequest):
     For regular URLs: Downloads first, then creates job with QUEUED status.
 
     Args:
-        request: Request body with url and optional model
+        request: Request body with url, optional model, and diarization options
 
     Returns:
         Job: Created job with downloading status (YouTube) or queued status (regular URL)
@@ -239,6 +326,10 @@ async def transcribe_from_url(request: TranscribeURLRequest):
         HTTPException: 408 if URL download times out
         HTTPException: 400 if download fails or invalid file type
     """
+    # Extract diarization parameters from request
+    diarize_enabled = request.get_diarize_enabled()
+    min_speakers, max_speakers = request.get_speaker_range()
+
     if is_youtube_url(request.url):
         # YouTube: Create job with DOWNLOADING status, let worker handle download
         job = Job(
@@ -246,12 +337,59 @@ async def transcribe_from_url(request: TranscribeURLRequest):
             model_size=request.model,
             status=JobStatus.DOWNLOADING,
             download_progress=0,
+            diarize=diarize_enabled,
+            min_speakers=min_speakers,
+            max_speakers=max_speakers,
         )
         await app.state.repo.create(job)
         return job
     else:
         # Regular URL: Download first, then queue
         tmp_path = await download_from_url(request.url)
-        job = Job(audio_path=tmp_path, model_size=request.model)
+        job = Job(
+            audio_path=tmp_path,
+            model_size=request.model,
+            diarize=diarize_enabled,
+            min_speakers=min_speakers,
+            max_speakers=max_speakers,
+        )
         await app.state.repo.create(job)
         return job
+
+
+@app.post("/jobs/{job_id}/retry", response_model=Job, status_code=status.HTTP_202_ACCEPTED)
+async def retry_diarization(job_id: str = PathParam(..., description="Job UUID")):
+    """Retry diarization on a job with partial failure.
+
+    Re-queues a job that has status=PARTIAL (transcription succeeded but
+    diarization failed) for another attempt at diarization.
+
+    Args:
+        job_id: Unique job identifier (UUID)
+
+    Returns:
+        Job: The job with status reset to QUEUED
+
+    Raises:
+        HTTPException: 404 if job not found
+        HTTPException: 400 if job status is not PARTIAL
+    """
+    job = await app.state.repo.get(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail=f"Job not found: {job_id}")
+
+    if job.status != JobStatus.PARTIAL:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Can only retry jobs with status 'partial'. Current: {job.status.value}"
+        )
+
+    # Re-queue for retry
+    job.status = JobStatus.QUEUED
+    job.diarization_error = None
+    job.diarization_error_code = None
+    job.started_at = None
+    job.completed_at = None
+    await app.state.repo.update(job)
+
+    return job

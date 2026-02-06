@@ -22,14 +22,15 @@ class TestJobStatus(unittest.TestCase):
     """Tests for JobStatus enum."""
 
     def test_all_status_values_exist(self):
-        """All five status values should exist."""
+        """All six status values should exist."""
         statuses = list(JobStatus)
-        self.assertEqual(len(statuses), 5)
+        self.assertEqual(len(statuses), 6)
         self.assertIn(JobStatus.QUEUED, statuses)
         self.assertIn(JobStatus.DOWNLOADING, statuses)
         self.assertIn(JobStatus.PROCESSING, statuses)
         self.assertIn(JobStatus.COMPLETED, statuses)
         self.assertIn(JobStatus.ERROR, statuses)
+        self.assertIn(JobStatus.PARTIAL, statuses)
 
     def test_status_values_are_strings(self):
         """Status values should be lowercase strings."""
@@ -38,6 +39,7 @@ class TestJobStatus(unittest.TestCase):
         self.assertEqual(JobStatus.PROCESSING.value, "processing")
         self.assertEqual(JobStatus.COMPLETED.value, "completed")
         self.assertEqual(JobStatus.ERROR.value, "error")
+        self.assertEqual(JobStatus.PARTIAL.value, "partial")
 
     def test_string_to_enum_conversion(self):
         """Should convert string to enum and back."""
@@ -299,6 +301,175 @@ class TestDownloadProgress:
 
         with pytest.raises(ValidationError):
             Job(audio_path="/tmp/test.mp3", download_progress=101)
+
+
+class TestDiarizationFields(unittest.TestCase):
+    """Tests for diarization-related Job fields."""
+
+    def test_diarize_defaults_to_true(self):
+        """diarize should default to True (matches CLI behavior)."""
+        job = Job(audio_path="/test.mp3")
+        self.assertTrue(job.diarize)
+
+    def test_diarize_can_be_disabled(self):
+        """diarize can be explicitly set to False."""
+        job = Job(audio_path="/test.mp3", diarize=False)
+        self.assertFalse(job.diarize)
+
+    def test_speaker_range_fields_default_to_none(self):
+        """min_speakers and max_speakers should default to None."""
+        job = Job(audio_path="/test.mp3")
+        self.assertIsNone(job.min_speakers)
+        self.assertIsNone(job.max_speakers)
+
+    def test_speaker_range_accepts_valid_values(self):
+        """Speaker range fields should accept valid positive integers."""
+        job = Job(audio_path="/test.mp3", min_speakers=2, max_speakers=5)
+        self.assertEqual(job.min_speakers, 2)
+        self.assertEqual(job.max_speakers, 5)
+
+    def test_min_speakers_greater_than_max_raises_error(self):
+        """min_speakers > max_speakers should raise ValidationError."""
+        with self.assertRaises(ValidationError) as ctx:
+            Job(audio_path="/test.mp3", min_speakers=5, max_speakers=2)
+
+        errors = ctx.exception.errors()
+        self.assertEqual(len(errors), 1)
+        self.assertIn("min_speakers", str(errors[0]))
+        self.assertIn("max_speakers", str(errors[0]))
+
+    def test_speaker_range_equal_values_valid(self):
+        """min_speakers == max_speakers should be valid (exact speaker count)."""
+        job = Job(audio_path="/test.mp3", min_speakers=3, max_speakers=3)
+        self.assertEqual(job.min_speakers, 3)
+        self.assertEqual(job.max_speakers, 3)
+
+    def test_only_min_speakers_valid(self):
+        """Setting only min_speakers without max_speakers should be valid."""
+        job = Job(audio_path="/test.mp3", min_speakers=2)
+        self.assertEqual(job.min_speakers, 2)
+        self.assertIsNone(job.max_speakers)
+
+    def test_only_max_speakers_valid(self):
+        """Setting only max_speakers without min_speakers should be valid."""
+        job = Job(audio_path="/test.mp3", max_speakers=5)
+        self.assertIsNone(job.min_speakers)
+        self.assertEqual(job.max_speakers, 5)
+
+    def test_progress_fields_default_to_none(self):
+        """Progress tracking fields should default to None."""
+        job = Job(audio_path="/test.mp3")
+        self.assertIsNone(job.progress)
+        self.assertIsNone(job.progress_phase)
+        self.assertIsNone(job.progress_phase_pct)
+
+    def test_progress_fields_accept_valid_values(self):
+        """Progress fields should accept valid values."""
+        job = Job(
+            audio_path="/test.mp3",
+            progress=75,
+            progress_phase="diarizing",
+            progress_phase_pct=50
+        )
+        self.assertEqual(job.progress, 75)
+        self.assertEqual(job.progress_phase, "diarizing")
+        self.assertEqual(job.progress_phase_pct, 50)
+
+    def test_progress_rejects_negative(self):
+        """progress should reject negative values."""
+        with self.assertRaises(ValidationError):
+            Job(audio_path="/test.mp3", progress=-1)
+
+    def test_progress_rejects_over_100(self):
+        """progress should reject values over 100."""
+        with self.assertRaises(ValidationError):
+            Job(audio_path="/test.mp3", progress=101)
+
+    def test_speaker_count_defaults_to_none(self):
+        """speaker_count should default to None."""
+        job = Job(audio_path="/test.mp3")
+        self.assertIsNone(job.speaker_count)
+
+    def test_speaker_count_accepts_valid_values(self):
+        """speaker_count should accept non-negative integers."""
+        job = Job(audio_path="/test.mp3", speaker_count=3)
+        self.assertEqual(job.speaker_count, 3)
+
+        # Also test zero (no speakers detected)
+        job = Job(audio_path="/test.mp3", speaker_count=0)
+        self.assertEqual(job.speaker_count, 0)
+
+    def test_speaker_count_rejects_negative(self):
+        """speaker_count should reject negative values."""
+        with self.assertRaises(ValidationError):
+            Job(audio_path="/test.mp3", speaker_count=-1)
+
+    def test_diarized_flag_defaults_to_none(self):
+        """diarized should default to None."""
+        job = Job(audio_path="/test.mp3")
+        self.assertIsNone(job.diarized)
+
+    def test_diarized_flag_accepts_boolean(self):
+        """diarized should accept True/False."""
+        job = Job(audio_path="/test.mp3", diarized=True)
+        self.assertTrue(job.diarized)
+
+        job = Job(audio_path="/test.mp3", diarized=False)
+        self.assertFalse(job.diarized)
+
+    def test_diarization_error_fields_default_to_none(self):
+        """Diarization error fields should default to None."""
+        job = Job(audio_path="/test.mp3")
+        self.assertIsNone(job.diarization_error)
+        self.assertIsNone(job.diarization_error_code)
+
+    def test_diarization_error_fields_accept_values(self):
+        """Diarization error fields should accept string values."""
+        job = Job(
+            audio_path="/test.mp3",
+            diarization_error="HF token required",
+            diarization_error_code="hf_token_required"
+        )
+        self.assertEqual(job.diarization_error, "HF token required")
+        self.assertEqual(job.diarization_error_code, "hf_token_required")
+
+    def test_partial_status_for_diarization_failure(self):
+        """Job can have PARTIAL status for transcription OK, diarization failed."""
+        job = Job(
+            audio_path="/test.mp3",
+            status=JobStatus.PARTIAL,
+            result_text="Transcribed text without speakers",
+            diarized=False,
+            diarization_error="HF token required for diarization",
+            diarization_error_code="hf_token_required"
+        )
+        self.assertEqual(job.status, JobStatus.PARTIAL)
+        self.assertEqual(job.status.value, "partial")
+        self.assertFalse(job.diarized)
+        self.assertIsNotNone(job.result_text)
+
+    def test_job_with_all_diarization_fields(self):
+        """Job should accept all diarization fields together."""
+        job = Job(
+            audio_path="/test.mp3",
+            diarize=True,
+            min_speakers=2,
+            max_speakers=4,
+            progress=100,
+            progress_phase="formatting",
+            progress_phase_pct=100,
+            speaker_count=3,
+            diarized=True,
+            diarization_error=None,
+            diarization_error_code=None
+        )
+        self.assertTrue(job.diarize)
+        self.assertEqual(job.min_speakers, 2)
+        self.assertEqual(job.max_speakers, 4)
+        self.assertEqual(job.progress, 100)
+        self.assertEqual(job.progress_phase, "formatting")
+        self.assertEqual(job.speaker_count, 3)
+        self.assertTrue(job.diarized)
 
 
 if __name__ == "__main__":

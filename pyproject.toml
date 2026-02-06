@@ -19,6 +19,7 @@ dependencies = [
     "python-multipart>=0.0.6",
     "httpx>=0.26.0",
     "yt-dlp>=2024.1.0",
+    "whisperx>=3.7.6",
 ]
 classifiers = [
     "Programming Language :: Python :: 3",

@@ -1,5 +1,61 @@
 # Project Milestones: Cesar
 
+## v2.3 WhisperX Migration (Shipped: 2026-02-02)
+
+**Delivered:** Replaced pyannote diarization with WhisperX unified pipeline for better word-level alignment and simpler architecture.
+
+**Phases completed:** 14-16 (9 plans total)
+
+**Key accomplishments:**
+
+- Unified diarization pipeline with WhisperX (transcription + wav2vec2 alignment + diarization)
+- Created WhisperXPipeline wrapper module (356 lines) with lazy model loading
+- Simplified orchestrator by deleting timestamp_aligner.py and using WhisperX unified approach
+- Preserved all CLI (--diarize) and API (diarize parameter) interfaces unchanged
+- Comprehensive testing: 108 diarization-related tests + 11 new E2E tests
+- Zero regressions from WhisperX migration
+
+**Stats:**
+
+- 46 files modified
+- +7,543 lines added, -1,374 removed
+- 3 phases, 9 plans
+- 2 days from start to ship (2026-02-01 → 2026-02-02)
+- 386 total tests (380 passing, 6 pre-existing failures)
+
+**Git range:** `869a289` → `5704cb3`
+
+**What's next:** v2.4 performance optimization or new output formats
+
+---
+
+## v2.2 Speaker Identification (Shipped: 2026-02-01)
+
+**Delivered:** Speaker diarization in transcripts with configurable defaults via TOML config.
+
+**Phases completed:** 9-13 (10 plans total)
+
+**Key accomplishments:**
+
+- Configuration system with TOML support (~/.config/cesar/config.toml)
+- Speaker diarization via pyannote.audio with timestamp alignment
+- Markdown output format with speaker labels and timestamps
+- CLI --diarize flag and API diarize parameter
+- Works across all input sources (files, URLs, YouTube)
+- Full pipeline orchestration with fallback support
+
+**Stats:**
+
+- 5 phases, 10 plans
+- 1 day from start to ship (2026-02-01)
+- 352 total tests
+
+**Git range:** `52a9636` (feat(09-01)) → `88e0b33` (docs(13))
+
+**What's next:** v2.3 WhisperX migration for better alignment
+
+---
+
 ## v2.1 YouTube Transcription (Shipped: 2026-02-01)
 
 **Delivered:** Direct YouTube video transcription via URL — no manual audio download required.

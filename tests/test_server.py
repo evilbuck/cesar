@@ -4,7 +4,9 @@ Tests for FastAPI server and health endpoint.
 Uses FastAPI TestClient with mocked worker and repository
 to avoid actual database/transcription operations.
 """
+import tempfile
 import unittest
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
 from fastapi.testclient import TestClient
@@ -808,6 +810,615 @@ class TestYouTubeExceptionHandler(unittest.TestCase):
         import json
         body = json.loads(response.body)
         self.assertEqual(body['error_type'], 'video_unavailable')
+
+
+class TestServerConfigLoading(unittest.TestCase):
+    """Tests for API server config file loading."""
+
+    def setUp(self):
+        """Set up test environment."""
+        self.temp_dir = tempfile.mkdtemp()
+        # Create mocks for repository and worker
+        self.mock_repo = MagicMock()
+        self.mock_repo.connect = AsyncMock()
+        self.mock_repo.close = AsyncMock()
+        self.mock_repo.get = AsyncMock()
+        self.mock_repo.list_all = AsyncMock(return_value=[])
+        self.mock_repo.create = AsyncMock()
+
+        self.mock_worker = MagicMock()
+        self.mock_worker.run = AsyncMock()
+        self.mock_worker.shutdown = AsyncMock()
+
+        # Patch the imports in server module
+        self.repo_patcher = patch("cesar.api.server.JobRepository")
+        self.worker_patcher = patch("cesar.api.server.BackgroundWorker")
+
+        self.mock_repo_class = self.repo_patcher.start()
+        self.mock_worker_class = self.worker_patcher.start()
+
+        self.mock_repo_class.return_value = self.mock_repo
+        self.mock_worker_class.return_value = self.mock_worker
+
+    def tearDown(self):
+        """Clean up test files and stop patches."""
+        import shutil
+        shutil.rmtree(self.temp_dir)
+        self.repo_patcher.stop()
+        self.worker_patcher.stop()
+
+    @patch('cesar.api.server.get_api_config_path')
+    def test_server_starts_without_config(self, mock_get_path):
+        """Test server starts when no config file exists."""
+        # Point to non-existent config
+        config_path = Path(self.temp_dir) / "config.toml"
+        mock_get_path.return_value = config_path
+
+        from cesar.api.server import app
+
+        # Server should start successfully
+        with TestClient(app) as client:
+            response = client.get("/health")
+            self.assertEqual(response.status_code, 200)
+
+    @patch('cesar.api.server.get_api_config_path')
+    def test_server_fails_on_invalid_config(self, mock_get_path):
+        """Test server fails to start with invalid config."""
+        # Create invalid config file
+        config_path = Path(self.temp_dir) / "config.toml"
+        config_path.write_text('min_speakers = -5')
+        mock_get_path.return_value = config_path
+
+        from cesar.api.server import app
+
+        # Server should fail to start (lifespan raises ConfigError)
+        with self.assertRaises(Exception) as context:
+            with TestClient(app) as client:
+                pass  # Should fail during lifespan startup
+
+        # Verify it's a config error
+        self.assertIn('min_speakers', str(context.exception))
+
+
+class TestDiarizationURLEndpoint(unittest.TestCase):
+    """Tests for diarization parameters in POST /transcribe/url endpoint."""
+
+    def setUp(self):
+        """Set up test client with mocked dependencies."""
+        # Create mocks for repository and worker
+        self.mock_repo = MagicMock()
+        self.mock_repo.connect = AsyncMock()
+        self.mock_repo.close = AsyncMock()
+        self.mock_repo.get = AsyncMock()
+        self.mock_repo.list_all = AsyncMock(return_value=[])
+        self.mock_repo.create = AsyncMock()
+        self.mock_repo.update = AsyncMock()
+
+        self.mock_worker = MagicMock()
+        self.mock_worker.run = AsyncMock()
+        self.mock_worker.shutdown = AsyncMock()
+
+        # Patch the imports in server module
+        self.repo_patcher = patch("cesar.api.server.JobRepository")
+        self.worker_patcher = patch("cesar.api.server.BackgroundWorker")
+
+        self.mock_repo_class = self.repo_patcher.start()
+        self.mock_worker_class = self.worker_patcher.start()
+
+        self.mock_repo_class.return_value = self.mock_repo
+        self.mock_worker_class.return_value = self.mock_worker
+
+        # Import app after patching
+        from cesar.api.server import app
+
+        self.app = app
+        # Use context manager to ensure lifespan runs
+        self._client_cm = TestClient(app)
+        self.client = self._client_cm.__enter__()
+
+    def tearDown(self):
+        """Stop all patches and close client."""
+        self._client_cm.__exit__(None, None, None)
+        self.repo_patcher.stop()
+        self.worker_patcher.stop()
+
+    def test_diarize_boolean_true(self):
+        """POST /transcribe/url with diarize=true creates job with diarize=True."""
+        response = self.client.post(
+            "/transcribe/url",
+            json={"url": "https://www.youtube.com/watch?v=test", "diarize": True},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertTrue(data["diarize"])
+
+    def test_diarize_boolean_false(self):
+        """POST /transcribe/url with diarize=false creates job with diarize=False."""
+        response = self.client.post(
+            "/transcribe/url",
+            json={"url": "https://www.youtube.com/watch?v=test", "diarize": False},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertFalse(data["diarize"])
+
+    def test_diarize_object_with_speaker_range(self):
+        """POST /transcribe/url with diarize object sets min/max speakers."""
+        response = self.client.post(
+            "/transcribe/url",
+            json={
+                "url": "https://www.youtube.com/watch?v=test",
+                "diarize": {"enabled": True, "min_speakers": 2, "max_speakers": 5},
+            },
+        )
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertTrue(data["diarize"])
+        self.assertEqual(data["min_speakers"], 2)
+        self.assertEqual(data["max_speakers"], 5)
+
+    def test_diarize_object_invalid_speaker_range(self):
+        """POST /transcribe/url with invalid speaker range returns 422."""
+        response = self.client.post(
+            "/transcribe/url",
+            json={
+                "url": "https://www.youtube.com/watch?v=test",
+                "diarize": {"enabled": True, "min_speakers": 5, "max_speakers": 2},
+            },
+        )
+
+        self.assertEqual(response.status_code, 422)
+
+    def test_diarize_default_is_true(self):
+        """POST /transcribe/url without diarize parameter defaults to True."""
+        response = self.client.post(
+            "/transcribe/url",
+            json={"url": "https://www.youtube.com/watch?v=test"},
+        )
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertTrue(data["diarize"])
+
+
+class TestDiarizationFileUploadEndpoint(unittest.TestCase):
+    """Tests for diarization parameters in POST /transcribe endpoint."""
+
+    def setUp(self):
+        """Set up test client with mocked dependencies."""
+        # Create mocks for repository and worker
+        self.mock_repo = MagicMock()
+        self.mock_repo.connect = AsyncMock()
+        self.mock_repo.close = AsyncMock()
+        self.mock_repo.get = AsyncMock()
+        self.mock_repo.list_all = AsyncMock(return_value=[])
+        self.mock_repo.create = AsyncMock()
+
+        self.mock_worker = MagicMock()
+        self.mock_worker.run = AsyncMock()
+        self.mock_worker.shutdown = AsyncMock()
+
+        # Patch the imports in server module
+        self.repo_patcher = patch("cesar.api.server.JobRepository")
+        self.worker_patcher = patch("cesar.api.server.BackgroundWorker")
+
+        self.mock_repo_class = self.repo_patcher.start()
+        self.mock_worker_class = self.worker_patcher.start()
+
+        self.mock_repo_class.return_value = self.mock_repo
+        self.mock_worker_class.return_value = self.mock_worker
+
+        # Import app after patching
+        from cesar.api.server import app
+
+        self.app = app
+        # Use context manager to ensure lifespan runs
+        self._client_cm = TestClient(app)
+        self.client = self._client_cm.__enter__()
+
+    def tearDown(self):
+        """Stop all patches and close client."""
+        self._client_cm.__exit__(None, None, None)
+        self.repo_patcher.stop()
+        self.worker_patcher.stop()
+
+    def test_file_upload_diarize_true(self):
+        """POST /transcribe with diarize=true form field creates job with diarize=True."""
+        file_content = b"fake audio content"
+        files = {"file": ("test.mp3", file_content, "audio/mpeg")}
+        data = {"diarize": "true"}
+
+        response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertTrue(resp_data["diarize"])
+
+    def test_file_upload_diarize_false(self):
+        """POST /transcribe with diarize=false form field creates job with diarize=False."""
+        file_content = b"fake audio content"
+        files = {"file": ("test.mp3", file_content, "audio/mpeg")}
+        data = {"diarize": "false"}
+
+        response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertFalse(resp_data["diarize"])
+
+    def test_file_upload_with_speaker_range(self):
+        """POST /transcribe with speaker range form fields."""
+        file_content = b"fake audio content"
+        files = {"file": ("test.mp3", file_content, "audio/mpeg")}
+        data = {"diarize": "true", "min_speakers": "2", "max_speakers": "5"}
+
+        response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertTrue(resp_data["diarize"])
+        self.assertEqual(resp_data["min_speakers"], 2)
+        self.assertEqual(resp_data["max_speakers"], 5)
+
+    def test_file_upload_invalid_speaker_range(self):
+        """POST /transcribe with invalid speaker range returns 400."""
+        file_content = b"fake audio content"
+        files = {"file": ("test.mp3", file_content, "audio/mpeg")}
+        data = {"diarize": "true", "min_speakers": "5", "max_speakers": "2"}
+
+        response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 400)
+        resp_data = response.json()
+        self.assertIn("min_speakers", resp_data["detail"])
+        self.assertIn("max_speakers", resp_data["detail"])
+
+    def test_file_upload_diarize_default_true(self):
+        """POST /transcribe without diarize parameter defaults to True."""
+        file_content = b"fake audio content"
+        files = {"file": ("test.mp3", file_content, "audio/mpeg")}
+
+        response = self.client.post("/transcribe", files=files)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertTrue(resp_data["diarize"])
+
+
+class TestTranscribeEndpointDiarizationE2E(unittest.TestCase):
+    """E2E tests for POST /transcribe diarization parameters using real audio files.
+
+    Validates API interface preservation (WX-07) and E2E API behavior (WX-12)
+    after WhisperX migration. Uses real audio file uploads to test job creation.
+    """
+
+    def setUp(self):
+        """Set up test client with mocked dependencies."""
+        # Create mocks for repository and worker
+        self.mock_repo = MagicMock()
+        self.mock_repo.connect = AsyncMock()
+        self.mock_repo.close = AsyncMock()
+        self.mock_repo.get = AsyncMock()
+        self.mock_repo.list_all = AsyncMock(return_value=[])
+        # Use side_effect to return the job passed to create
+        self.mock_repo.create = AsyncMock(side_effect=lambda job: job)
+        self.mock_repo.update = AsyncMock()
+
+        self.mock_worker = MagicMock()
+        self.mock_worker.run = AsyncMock()
+        self.mock_worker.shutdown = AsyncMock()
+
+        # Patch the imports in server module
+        self.repo_patcher = patch("cesar.api.server.JobRepository")
+        self.worker_patcher = patch("cesar.api.server.BackgroundWorker")
+
+        self.mock_repo_class = self.repo_patcher.start()
+        self.mock_worker_class = self.worker_patcher.start()
+
+        self.mock_repo_class.return_value = self.mock_repo
+        self.mock_worker_class.return_value = self.mock_worker
+
+        # Import app after patching
+        from cesar.api.server import app
+
+        self.app = app
+        # Use context manager to ensure lifespan runs
+        self._client_cm = TestClient(app)
+        self.client = self._client_cm.__enter__()
+
+        # Path to real audio file for E2E tests
+        self.audio_file_path = Path(__file__).parent.parent / "assets" / "testing speech audio file.m4a"
+
+    def tearDown(self):
+        """Stop all patches and close client."""
+        self._client_cm.__exit__(None, None, None)
+        self.repo_patcher.stop()
+        self.worker_patcher.stop()
+
+    def test_api_transcribe_diarize_parameter_creates_job(self):
+        """POST /transcribe with diarize=true creates job with diarization enabled."""
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"model": "base", "diarize": "true"}
+
+            response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertIn("id", resp_data)
+        self.assertTrue(resp_data["diarize"])
+
+        # Verify repository.create was called with job that has diarize=True
+        self.mock_repo.create.assert_called_once()
+        created_job = self.mock_repo.create.call_args[0][0]
+        self.assertTrue(created_job.diarize)
+
+    def test_api_transcribe_diarize_false_parameter(self):
+        """POST /transcribe with diarize=false creates job with diarize=False."""
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"model": "base", "diarize": "false"}
+
+            response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertFalse(resp_data["diarize"])
+
+        # Verify repository.create was called with job that has diarize=False
+        self.mock_repo.create.assert_called_once()
+        created_job = self.mock_repo.create.call_args[0][0]
+        self.assertFalse(created_job.diarize)
+
+    def test_api_transcribe_diarize_default_true(self):
+        """POST /transcribe without diarize parameter defaults to True."""
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            # No diarize parameter - should default to True
+
+            response = self.client.post("/transcribe", files=files)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+        self.assertTrue(resp_data["diarize"])
+
+        # Verify repository.create was called with job that has diarize=True (default)
+        self.mock_repo.create.assert_called_once()
+        created_job = self.mock_repo.create.call_args[0][0]
+        self.assertTrue(created_job.diarize)
+
+    def test_api_transcribe_response_schema(self):
+        """POST /transcribe response has all required fields with correct types."""
+        import re
+
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"diarize": "true"}
+
+            response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+
+        # Verify job_id is UUID format
+        self.assertIn("id", resp_data)
+        uuid_pattern = re.compile(r'^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$')
+        self.assertRegex(resp_data["id"], uuid_pattern)
+
+        # Verify status is string
+        self.assertIn("status", resp_data)
+        self.assertIsInstance(resp_data["status"], str)
+        self.assertEqual(resp_data["status"], "queued")
+
+        # Verify diarize is boolean true
+        self.assertIn("diarize", resp_data)
+        self.assertIsInstance(resp_data["diarize"], bool)
+        self.assertTrue(resp_data["diarize"])
+
+        # Verify model_size is string
+        self.assertIn("model_size", resp_data)
+        self.assertIsInstance(resp_data["model_size"], str)
+
+        # Verify created_at is ISO format string
+        self.assertIn("created_at", resp_data)
+        self.assertIsInstance(resp_data["created_at"], str)
+        # ISO format: YYYY-MM-DDTHH:MM:SS
+        iso_pattern = re.compile(r'^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}')
+        self.assertRegex(resp_data["created_at"], iso_pattern)
+
+    def test_api_job_status_includes_diarize_field(self):
+        """GET /jobs/{job_id} response includes diarize field matching creation request."""
+        from cesar.api.models import Job, JobStatus
+
+        # First create a job via POST
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"diarize": "true", "min_speakers": "2", "max_speakers": "4"}
+
+            create_response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(create_response.status_code, 202)
+        created_job_data = create_response.json()
+        job_id = created_job_data["id"]
+
+        # Mock repository.get to return the job
+        mock_job = Job(
+            id=job_id,
+            audio_path="/tmp/test.m4a",
+            model_size="base",
+            status=JobStatus.QUEUED,
+            diarize=True,
+            min_speakers=2,
+            max_speakers=4,
+        )
+        self.mock_repo.get.return_value = mock_job
+
+        # GET the job status
+        get_response = self.client.get(f"/jobs/{job_id}")
+
+        self.assertEqual(get_response.status_code, 200)
+        job_data = get_response.json()
+
+        # Verify diarize field is present and matches creation request
+        self.assertIn("diarize", job_data)
+        self.assertTrue(job_data["diarize"])
+
+        # Verify speaker range options are preserved
+        self.assertIn("min_speakers", job_data)
+        self.assertEqual(job_data["min_speakers"], 2)
+        self.assertIn("max_speakers", job_data)
+        self.assertEqual(job_data["max_speakers"], 4)
+
+    def test_api_transcribe_with_speaker_options(self):
+        """POST /transcribe with speaker options creates job with preserved values."""
+        with open(self.audio_file_path, "rb") as audio_file:
+            files = {"file": ("test.m4a", audio_file, "audio/mp4")}
+            data = {"diarize": "true", "min_speakers": "2", "max_speakers": "4"}
+
+            response = self.client.post("/transcribe", files=files, data=data)
+
+        self.assertEqual(response.status_code, 202)
+        resp_data = response.json()
+
+        # Verify speaker options in response
+        self.assertTrue(resp_data["diarize"])
+        self.assertEqual(resp_data["min_speakers"], 2)
+        self.assertEqual(resp_data["max_speakers"], 4)
+
+        # Verify repository.create was called with correct speaker options
+        self.mock_repo.create.assert_called_once()
+        created_job = self.mock_repo.create.call_args[0][0]
+        self.assertTrue(created_job.diarize)
+        self.assertEqual(created_job.min_speakers, 2)
+        self.assertEqual(created_job.max_speakers, 4)
+
+
+class TestRetryEndpoint(unittest.TestCase):
+    """Tests for POST /jobs/{job_id}/retry endpoint."""
+
+    def setUp(self):
+        """Set up test client with mocked dependencies."""
+        # Create mocks for repository and worker
+        self.mock_repo = MagicMock()
+        self.mock_repo.connect = AsyncMock()
+        self.mock_repo.close = AsyncMock()
+        self.mock_repo.get = AsyncMock()
+        self.mock_repo.list_all = AsyncMock(return_value=[])
+        self.mock_repo.create = AsyncMock()
+        self.mock_repo.update = AsyncMock()
+
+        self.mock_worker = MagicMock()
+        self.mock_worker.run = AsyncMock()
+        self.mock_worker.shutdown = AsyncMock()
+
+        # Patch the imports in server module
+        self.repo_patcher = patch("cesar.api.server.JobRepository")
+        self.worker_patcher = patch("cesar.api.server.BackgroundWorker")
+
+        self.mock_repo_class = self.repo_patcher.start()
+        self.mock_worker_class = self.worker_patcher.start()
+
+        self.mock_repo_class.return_value = self.mock_repo
+        self.mock_worker_class.return_value = self.mock_worker
+
+        # Import app after patching
+        from cesar.api.server import app
+
+        self.app = app
+        # Use context manager to ensure lifespan runs
+        self._client_cm = TestClient(app)
+        self.client = self._client_cm.__enter__()
+
+    def tearDown(self):
+        """Stop all patches and close client."""
+        self._client_cm.__exit__(None, None, None)
+        self.repo_patcher.stop()
+        self.worker_patcher.stop()
+
+    def test_retry_partial_job_success(self):
+        """POST /jobs/{id}/retry with PARTIAL job resets to QUEUED."""
+        test_job = Job(
+            id="test-uuid-partial",
+            audio_path="/path/to/audio.mp3",
+            model_size="base",
+            status=JobStatus.PARTIAL,
+            diarization_error="HF token required",
+            diarization_error_code="hf_token_required",
+        )
+        self.mock_repo.get.return_value = test_job
+
+        response = self.client.post("/jobs/test-uuid-partial/retry")
+
+        self.assertEqual(response.status_code, 202)
+        data = response.json()
+        self.assertEqual(data["status"], "queued")
+        self.assertIsNone(data["diarization_error"])
+        self.assertIsNone(data["diarization_error_code"])
+        # Verify update was called
+        self.mock_repo.update.assert_called_once()
+
+    def test_retry_completed_job_fails(self):
+        """POST /jobs/{id}/retry with COMPLETED job returns 400."""
+        test_job = Job(
+            id="test-uuid-completed",
+            audio_path="/path/to/audio.mp3",
+            model_size="base",
+            status=JobStatus.COMPLETED,
+        )
+        self.mock_repo.get.return_value = test_job
+
+        response = self.client.post("/jobs/test-uuid-completed/retry")
+
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn("partial", data["detail"].lower())
+        self.assertIn("completed", data["detail"].lower())
+
+    def test_retry_queued_job_fails(self):
+        """POST /jobs/{id}/retry with QUEUED job returns 400."""
+        test_job = Job(
+            id="test-uuid-queued",
+            audio_path="/path/to/audio.mp3",
+            model_size="base",
+            status=JobStatus.QUEUED,
+        )
+        self.mock_repo.get.return_value = test_job
+
+        response = self.client.post("/jobs/test-uuid-queued/retry")
+
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn("partial", data["detail"].lower())
+
+    def test_retry_error_job_fails(self):
+        """POST /jobs/{id}/retry with ERROR job returns 400."""
+        test_job = Job(
+            id="test-uuid-error",
+            audio_path="/path/to/audio.mp3",
+            model_size="base",
+            status=JobStatus.ERROR,
+            error_message="Some error",
+        )
+        self.mock_repo.get.return_value = test_job
+
+        response = self.client.post("/jobs/test-uuid-error/retry")
+
+        self.assertEqual(response.status_code, 400)
+        data = response.json()
+        self.assertIn("partial", data["detail"].lower())
+
+    def test_retry_not_found(self):
+        """POST /jobs/{id}/retry with non-existent job returns 404."""
+        self.mock_repo.get.return_value = None
+
+        response = self.client.post("/jobs/nonexistent-id/retry")
+
+        self.assertEqual(response.status_code, 404)
+        data = response.json()
+        self.assertIn("Job not found", data["detail"])
 
 
 if __name__ == "__main__":

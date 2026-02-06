@@ -1,285 +1,265 @@
-# Feature Landscape: Python CLI Packaging
+# Feature Landscape: Caching and Idempotent Processing
 
-**Domain:** Python CLI tool packaging for pip/pipx installability
-**Researched:** 2026-01-23
-**Context:** Existing Click-based CLI tool being packaged for distribution
+**Domain:** CLI tools with caching and resumable operations
+**Researched:** 2026-02-02
+**Confidence:** HIGH
+
+## Executive Summary
+
+Caching in CLI tools follows predictable patterns: content-addressable storage, cache inspection commands, force-bypass flags, and granular invalidation. Processing pipelines add resumability (save intermediate artifacts, retry from failure point) and idempotency (same input = same output, regardless of execution count).
+
+**Cesar context:** Multi-stage pipeline (download → transcribe → diarize → format) where each stage is expensive (minutes) and failures mid-pipeline waste prior work. Users expect to skip reprocessing identical inputs and resume from failure points.
 
 ## Table Stakes
 
-Features users expect. Missing = pip/pipx install fails or feels broken.
+Features users expect. Missing = product feels broken.
 
 | Feature | Why Expected | Complexity | Notes |
 |---------|--------------|------------|-------|
-| `pyproject.toml` with build system | Modern Python standard (PEP 517/518) | Low | Required since Python 3.6+, setuptools or hatchling |
-| `[project.scripts]` entry point | Makes `cesar` command available | Low | Maps command name to Python function |
-| Package structure with `__init__.py` | Python needs importable package | Low | Move modules into `src/cesar/` or `cesar/` directory |
-| Semantic version in single source | Users expect `--version` to work | Low | Define in `pyproject.toml` or `__version__` |
-| Declared dependencies | pip installs dependencies automatically | Low | Already have `requirements.txt`, convert to `pyproject.toml` |
-| Python version constraint | Prevents install on incompatible Python | Low | `requires-python = ">=3.10"` |
-| README as long description | PyPI/GitHub display | Low | Already exists |
-| License declaration | Package metadata requirement | Low | Add to `pyproject.toml` |
-| Relative imports within package | Imports break without this | Medium | Current code uses sibling imports |
+| **Skip reprocessing identical inputs** | Docker, npm, pip all do this | Low | Hash-based cache keys (source URL/path + params) |
+| **--no-cache flag** | Universal override pattern | Low | Force reprocess even if cached |
+| **Cache location visibility** | Users need to clean cache manually | Low | Print location in --cache-info or docs |
+| **Automatic cache directory creation** | User shouldn't create ~/.cache/cesar/ | Low | mkdir -p on first use |
+| **Cache survives crashes** | Cache exists to survive failures | Low | Atomic writes, temp + rename pattern |
+| **Reasonable cache expiration** | URL content changes over time | Medium | Time-step function (15min windows) for URLs |
+| **Disk space management** | Caches grow unbounded | Medium | LRU eviction or manual purge command |
+
+### Evidence
+
+**Docker:** `docker build --no-cache` forces rebuild ([Docker Docs](https://docs.docker.com/build/cache/)).
+
+**npm:** `npm cache verify` checks integrity, `npm cache clean --force` purges ([npm Docs](https://docs.npmjs.com/cli/v8/commands/npm-cache/)).
+
+**pip:** `pip cache info`, `pip cache list`, `pip cache purge` commands ([pip v26.0 Docs](https://pip.pypa.io/en/stable/cli/pip_cache/)).
+
+**wget/curl:** `-c` (wget) and `-C -` (curl) for resuming interrupted downloads ([nixCraft wget](https://www.cyberciti.biz/tips/wget-resume-broken-download.html), [curl docs](https://everything.curl.dev/usingcurl/downloads/resume.html)).
+
+**rsync:** `--partial` keeps partial files, `-P` = `--partial --progress` ([rsync guide](https://www.cyberciti.biz/faq/rsync-resume-partially-transferred-downloaded-files-option/)).
 
 ## Differentiators
 
-Features that set well-packaged CLI tools apart. Not expected, but valued.
+Features that set product apart. Not expected, but valued.
 
 | Feature | Value Proposition | Complexity | Notes |
 |---------|-------------------|------------|-------|
-| Subcommand structure | Future-proofs for new commands | Medium | `cesar transcribe`, `cesar models`, etc. |
-| Shell completion generation | Power user productivity | Medium | Click has built-in support via `click.shell_complete` |
-| Rich help formatting | Professional appearance | Low | Already using Rich, can extend to help |
-| `py.typed` marker | IDE support for library users | Low | Empty file signals typing support |
-| `--debug` flag | Troubleshooting assistance | Low | Show stack traces, verbose diagnostics |
-| Config file support | Persist user preferences | Medium | `~/.config/cesar/config.toml` |
-| Machine-readable output | Scripting/automation | Medium | `--format json` option |
-| First-run experience | Guides new users | Medium | Model download prompt, help hints |
-| Offline indicator | Trust building | Low | Show "Offline ready" after model cached |
-| Progress persistence | Resume interrupted work | High | Checkpoint system for long transcriptions |
+| **--cache-info flag** | Inspect what's cached without side effects | Low | Show cache dir, size, hit/miss stats |
+| **Resume from failure point** | Save minutes on retry (don't re-transcribe after diarization fails) | Medium | Save intermediate artifacts (transcription.txt, diarization.json) |
+| **Granular cache invalidation** | `--invalidate-stage=diarize` forces re-run from that stage | Medium | Stage-level cache keys |
+| **Time-step function for URLs** | Smart freshness (15min windows, not second-level precision) | Low | Round timestamp to 15min intervals for URL cache keys |
+| **Smart extension correction** | Auto-fix .txt to .md when diarize=True | Low | Warn user, update file path (already implemented in v2.2) |
+| **Cache warming** | Pre-download models/artifacts for offline use | Low | `cesar cache warm` downloads Whisper models, diarization models |
+| **Dry-run mode** | `--dry-run` shows what would be cached/reused | Low | Useful for debugging cache behavior |
+
+### Evidence
+
+**Build systems:** Make, Ninja, Bazel use target-level caching with incremental rebuilds ([Make optimization](https://moldstud.com/articles/p-master-incremental-builds-ultimate-makefile-optimization-techniques-for-developers)).
+
+**Task queues:** BullMQ supports idempotent jobs with unique identifiers, retry with exponential backoff ([BullMQ patterns](https://docs.bullmq.io/patterns/idempotent-jobs)).
+
+**Content-addressable storage:** npm's cacache uses SRI hashes for content addressing ([npm/cacache](https://github.com/npm/cacache)), Git uses SHA-1 content hashing.
+
+**Checkpoint/resume:** Cloud Run recommends checkpointing partial results to storage for resume ([Google Cloud Run](https://docs.cloud.google.com/run/docs/jobs-retries)).
 
 ## Anti-Features
 
-Features to explicitly NOT build. Common mistakes in CLI packaging.
+Features to explicitly NOT build. Common mistakes in this domain.
 
 | Anti-Feature | Why Avoid | What to Do Instead |
 |--------------|-----------|-------------------|
-| setup.py without pyproject.toml | Legacy, harder to maintain | Use `pyproject.toml` exclusively |
-| Hardcoded paths | Breaks on other systems | Use `pathlib` and XDG base directories |
-| Implicit dependencies | Install fails mysteriously | Declare all in `pyproject.toml` |
-| Global state/singletons | Testing/parallelism issues | Pass configuration explicitly |
-| Printing instead of logging | Can't control output | Use `logging` module with levels |
-| Catching all exceptions | Hides real errors | Catch specific exceptions |
-| Required config files | Fails on fresh install | Sensible defaults, optional config |
-| Non-zero exit on success | Breaks shell scripts | `sys.exit(0)` on success, non-zero on error |
-| ANSI codes without detection | Garbled output in pipes | Let Rich handle TTY detection |
-| Bundling large assets | Huge package size | Download on first use (already doing this) |
-| `__main__.py` only entry | No programmatic import | Expose clean API in `__init__.py` |
+| **Per-second cache freshness for URLs** | Excessive invalidation, cache thrashing | 15-minute time-step windows (rounded timestamps) |
+| **Automatic cache cleanup on exit** | User loses cache benefit, unexpected behavior | Explicit `cesar cache clean` command |
+| **Cache inside project directory** | Pollutes repo, breaks .gitignore expectations | Use XDG Base Directory (~/.cache/cesar/) |
+| **Mandatory cache** | User loses control, no override | Always honor --no-cache flag |
+| **Silent cache misses** | User confused why reprocessing | Log cache hit/miss in verbose mode |
+| **Cache without version metadata** | Incompatible cache from old Cesar version | Include version in cache key or metadata |
+| **Blocking on cache locks** | Concurrent runs deadlock | Timeout + fallback to reprocess |
+| **Re-download on every URL transcription** | Wastes bandwidth, user frustration | Cache downloaded files with time-step keys |
+
+### Evidence
+
+**Docker layer caching:** Dependencies change less often than code, so copy package files before source ([Docker best practices](https://docs.docker.com/build/building/best-practices/)).
+
+**yt-dlp resume issues:** Fragmented downloads fail to resume properly with 403 errors ([yt-dlp #14087](https://github.com/yt-dlp/yt-dlp/issues/14087)). Lesson: Resumability requires atomic writes and careful error handling.
+
+**CI/CD cache purging:** Improper cache invalidation causes stale builds ([Datadog blog](https://www.datadoghq.com/blog/cache-purge-ci-cd/)). Lesson: Include dependency fingerprints in cache keys.
 
 ## Feature Dependencies
 
 ```
-pyproject.toml (foundation)
-    |
-    +-- [project.scripts] entry point
-    |       |
-    |       +-- Package structure (required for entry point to work)
-    |               |
-    |               +-- Relative imports (required for package)
-    |
-    +-- Declared dependencies
-    |
-    +-- Python version constraint
+Cache Foundation
+├── Cache directory creation
+├── Content-addressable keys (hash-based)
+└── Atomic writes (temp + rename)
+    ↓
+Basic Cache Operations
+├── Cache lookup (key → path)
+├── Cache store (key + data → disk)
+└── --no-cache flag (bypass cache)
+    ↓
+Intermediate Artifact Storage
+├── Stage-level cache keys (transcribe, diarize, format)
+├── Resume from failure point
+└── keep_intermediate flag (debug mode, already exists)
+    ↓
+Advanced Features
+├── --cache-info (inspect cache)
+├── --invalidate-stage (granular control)
+├── Time-step function for URLs
+└── Cache warming (cesar cache warm)
 ```
 
-```
-Subcommand structure
-    |
-    +-- Click groups (instead of single command)
-    |
-    +-- Separate command modules
-```
-
-```
-Shell completion
-    |
-    +-- Click shell_complete integration
-    |
-    +-- Install script or instructions
-```
+**Dependency rationale:**
+1. Foundation must exist before operations
+2. Basic operations enable intermediate artifacts
+3. Intermediate artifacts enable resume functionality
+4. Advanced features build on working cache
 
 ## MVP Recommendation
 
-For MVP (pipx installable), prioritize:
+For MVP (v2.4 Idempotent Processing), prioritize:
 
-1. **pyproject.toml** - Foundation, everything depends on this
-2. **Package structure** - Move to `src/cesar/` layout
-3. **Entry point** - `cesar` command registration
-4. **Subcommand structure** - `cesar transcribe` (enables future expansion)
-5. **Relative imports** - Fix imports for package context
+### Phase 1: Cache Foundation (must-have)
+1. Cache directory at ~/.cache/cesar/ (XDG Base Directory)
+2. Content-addressable keys: hash(source_path/url + model_size + diarize + min/max_speakers)
+3. Stage-level cache keys (transcription, diarization artifacts)
+4. Atomic writes with temp + rename pattern
+5. --no-cache flag to force reprocess
 
-Defer to post-MVP:
+### Phase 2: Resumability (must-have)
+1. Save transcription.txt after transcribe stage
+2. Save diarization.json after diarize stage (WhisperXSegment list)
+3. Resume on retry: check cache for prior stages, skip if present
+4. Cache lookup in orchestrator before each stage
 
-- **Shell completion**: Nice-to-have, can add later without breaking changes
-- **Config file support**: Complexity, most users won't need
-- **Machine-readable output**: Wait for actual demand
-- **Progress persistence**: High complexity, niche use case
+### Phase 3: Visibility (should-have)
+1. --cache-info flag (location, size, hit/miss stats)
+2. Verbose logging of cache hits/misses
+3. Cache size in health endpoint (API)
 
-## Complexity Analysis
+### Phase 4: URL Freshness (should-have)
+1. Time-step function for URLs (15-minute windows)
+2. Include rounded timestamp in URL cache keys
+3. Config option for time-step interval (default: 15min)
 
-### Low Complexity (< 1 hour)
+## Defer to Post-MVP
 
-| Feature | Why Low | Risk |
-|---------|---------|------|
-| pyproject.toml creation | Standard template | Low |
-| Entry point declaration | One line config | Low |
-| Version in single source | Pattern well-documented | Low |
-| Python constraint | One line config | Low |
-| README as description | One line config | Low |
-| License declaration | One line config | Low |
-| `py.typed` marker | Empty file | Low |
-| `--debug` flag | Click pattern | Low |
+- **cesar cache clean**: Manual cache purge command
+  - Reason: Users can delete ~/.cache/cesar/ manually
+- **--invalidate-stage**: Granular invalidation
+  - Reason: --no-cache covers 80% of use cases
+- **cesar cache warm**: Pre-download models
+  - Reason: Models auto-download on first use already
+- **--dry-run**: Show cache behavior without execution
+  - Reason: Debugging feature, not core functionality
+- **LRU eviction**: Automatic cache size management
+  - Reason: Complexity, manual cleanup sufficient for v2.4
 
-### Medium Complexity (1-4 hours)
+## Cesar-Specific Integration
 
-| Feature | Why Medium | Risk |
-|---------|------------|------|
-| Package structure refactor | Many files to move, imports to fix | Medium |
-| Subcommand structure | Restructure CLI, but Click supports well | Low |
-| Shell completion | Click built-in, but install complexity | Low |
-| Relative imports | Requires testing all import paths | Medium |
-| First-run experience | UX decisions, model download prompt | Low |
-| Config file support | File format, merge with CLI args | Medium |
+### Existing Features That Support Caching
 
-### High Complexity (> 4 hours)
+| Feature | How It Helps Caching |
+|---------|---------------------|
+| keep_intermediate flag (v2.4) | Already saves transcription.txt and diarization.json in debug mode |
+| SQLite job queue (v2.0) | Store cache metadata (cache_key, cached_stages) per job |
+| OrchestrationResult.diarized (v2.6) | Detect fallback scenarios (transcription cached, diarization failed) |
+| PARTIAL status (v2.6) | Retry endpoint already supports resume from failure |
+| UUID temp filenames (v2.1) | Collision-free concurrent cache writes |
 
-| Feature | Why High | Risk |
-|---------|----------|------|
-| Progress persistence | Checkpoint format, resume logic | High |
-| Machine-readable output | Multiple format support, schema design | Medium |
+### Pipeline Stage Mapping
 
-## Package Structure Options
+| Stage | Input | Output | Cache Key Components |
+|-------|-------|--------|---------------------|
+| Download (URLs/YouTube) | URL | audio file | hash(url + time_step) |
+| Transcribe | audio file | transcription.txt | hash(audio_path + model_size) |
+| Diarize | audio file + transcription | diarization.json | hash(audio_path + min/max_speakers) |
+| Format | transcription + diarization | final .md/.txt | hash(inputs + format_options) |
 
-### Option A: Flat Package (Simpler)
+### CLI Cache Flags
 
-```
-cesar/
-    __init__.py
-    __main__.py
-    cli.py
-    transcriber.py
-    device_detection.py
-    utils.py
-pyproject.toml
-```
+```bash
+# Force reprocess (bypass cache)
+cesar transcribe youtube.com/watch?v=xyz --no-cache
 
-**Pros:** Minimal change, familiar layout
-**Cons:** Name collision risk, less standard
+# Inspect cache status
+cesar transcribe file.mp3 --cache-info
+# Output: Cache hit: transcription (saved 2m 15s), Cache miss: diarization
 
-### Option B: src/ Layout (Recommended)
-
-```
-src/
-    cesar/
-        __init__.py
-        __main__.py
-        cli.py
-        transcriber.py
-        device_detection.py
-        utils.py
-pyproject.toml
-tests/
+# Normal operation (use cache if available)
+cesar transcribe file.mp3 -o out.md
+# Output: Using cached transcription from 2026-02-02 15:30:00
 ```
 
-**Pros:** Prevents accidental local imports, standard modern layout
-**Cons:** More file moves, requires import path changes
+### API Cache Parameters
 
-**Recommendation:** Use src/ layout. It's the modern standard and prevents the common pitfall of accidentally importing local source instead of installed package during development.
-
-## Entry Point Configuration
-
-```toml
-[project.scripts]
-cesar = "cesar.cli:main"
+```json
+POST /transcribe/url
+{
+  "url": "https://example.com/audio.mp3",
+  "model": "base",
+  "diarize": true,
+  "use_cache": true,        // default: true
+  "cache_ttl_minutes": 15   // URL freshness window
+}
 ```
 
-For subcommand structure with Click groups:
+### Cache Metadata in Job Model
 
 ```python
-# cli.py
-import click
-
-@click.group()
-@click.version_option()
-def cli():
-    """Cesar - Offline audio transcription"""
-    pass
-
-@cli.command()
-@click.argument('input_file')
-@click.option('-o', '--output', required=True)
-def transcribe(input_file, output):
-    """Transcribe audio file to text"""
-    ...
-
-# Entry point targets 'cli' group, not individual command
+class Job(BaseModel):
+    # ... existing fields ...
+    cache_key: Optional[str]              # Content-addressable key
+    cached_stages: List[str] = []         # ["transcription", "diarization"]
+    cache_saved_seconds: Optional[float]  # Time saved by cache hits
 ```
 
-```toml
-[project.scripts]
-cesar = "cesar.cli:cli"
-```
+## Risks and Mitigations
 
-## Dependency Declaration
+| Risk | Impact | Mitigation |
+|------|--------|-----------|
+| **Cache corruption** | Failed jobs, user frustration | Atomic writes (temp + rename), validate on read |
+| **Cache size explosion** | Disk space issues | Document manual cleanup, log cache size in --cache-info |
+| **Stale URL content** | Outdated transcriptions | Time-step function (15min windows) |
+| **Cache key collisions** | Wrong transcription returned | Include all parameters in hash (model, diarize, speakers) |
+| **Concurrent access conflicts** | Race conditions, corrupted writes | Use UUID temp filenames, atomic renames |
+| **Version incompatibility** | Old cache breaks new Cesar | Include Cesar version in cache metadata, ignore old cache |
 
-Convert from `requirements.txt` to `pyproject.toml`:
+## Success Metrics
 
-**Core dependencies only:**
-```toml
-[project]
-dependencies = [
-    "faster-whisper>=1.0.0",
-    "click>=8.0.0",
-    "rich>=13.0.0",
-]
-```
+Cache implementation succeeds when:
 
-**Note:** `torch`, `ctranslate2`, `huggingface-hub` are transitive dependencies of `faster-whisper` - don't re-declare.
-
-**Optional dev dependencies:**
-```toml
-[project.optional-dependencies]
-dev = [
-    "pytest>=8.0.0",
-    "black>=25.0.0",
-    "ruff>=0.10.0",
-    "mypy>=1.0.0",
-]
-```
-
-## First-Run Experience
-
-For tools that download large assets on first use:
-
-1. **Check if model exists** before attempting download
-2. **Prompt user** with size estimate: "Model 'base' (74MB) not found. Download now? [Y/n]"
-3. **Show download progress** with Rich progress bar
-4. **Confirm success** with "Model cached to ~/.cache/huggingface/hub/"
-5. **Handle offline gracefully** with clear error message
-
-```python
-def ensure_model_available(model_size: str, auto_download: bool = False) -> bool:
-    """Check model availability, optionally prompt for download."""
-    if model_cached(model_size):
-        return True
-
-    if auto_download:
-        download_model(model_size)
-        return True
-
-    # Interactive prompt
-    console.print(f"Model '{model_size}' not found locally.")
-    if click.confirm(f"Download model ({MODEL_SIZES[model_size]})?"):
-        download_model(model_size)
-        return True
-
-    return False
-```
+1. **Idempotency:** Running same command twice with same input produces identical output in <1s on second run
+2. **Resume works:** Retry after diarization failure skips transcription (saves 2-5 minutes)
+3. **No false cache hits:** Different inputs never return same cached output
+4. **Disk space predictable:** Cache growth rate documented, users can estimate size
+5. **Cache visible:** --cache-info shows what's cached, how much space used
 
 ## Sources
 
-**Confidence Levels:**
-- HIGH: PyPA (Python Packaging Authority) documentation, PEP standards
-- MEDIUM: Widely adopted patterns from popular CLI tools (black, ruff, pytest)
-- LOW: Community conventions without official documentation
+**Content-addressable caching:**
+- [npm/cacache - Content-addressable cache](https://github.com/npm/cacache)
+- [Docker Build Cache](https://docs.docker.com/build/cache/)
+- [pip cache commands](https://pip.pypa.io/en/stable/cli/pip_cache/)
+- [npm cache verify/clean](https://docs.npmjs.com/cli/v8/commands/npm-cache/)
 
-**References:**
-- PEP 517 - Build system interface (HIGH)
-- PEP 518 - pyproject.toml for build requirements (HIGH)
-- PEP 621 - Project metadata in pyproject.toml (HIGH)
-- Click documentation - Command groups and completion (HIGH)
-- Python Packaging User Guide - packaging.python.org (HIGH)
-- src layout pattern - widely adopted since 2018 (MEDIUM)
+**Resumable operations:**
+- [wget resume downloads](https://www.cyberciti.biz/tips/wget-resume-broken-download.html)
+- [curl resume with -C flag](https://everything.curl.dev/usingcurl/downloads/resume.html)
+- [rsync --partial flag](https://www.cyberciti.biz/faq/rsync-resume-partially-transferred-downloaded-files-option/)
 
----
+**Idempotent processing:**
+- [BullMQ idempotent jobs](https://docs.bullmq.io/patterns/idempotent-jobs)
+- [Google Cloud Run retry best practices](https://docs.cloud.google.com/run/docs/jobs-retries)
+- [Temporal retry policies](https://docs.temporal.io/encyclopedia/retry-policies)
 
-*Research conducted: 2026-01-23*
+**Build system caching:**
+- [Make incremental builds](https://moldstud.com/articles/p-master-incremental-builds-ultimate-makefile-optimization-techniques-for-developers)
+- [Docker layer caching best practices](https://docs.docker.com/build/building/best-practices/)
+
+**Cache invalidation:**
+- [Datadog CI/CD cache purging patterns](https://www.datadoghq.com/blog/cache-purge-ci-cd/)
+- [Docker build cache invalidation](https://docs.docker.com/build/cache/invalidation/)
+
+**Known issues to avoid:**
+- [yt-dlp resume failures with 403](https://github.com/yt-dlp/yt-dlp/issues/14087)
+- [ffmpeg corrupt segment caching](https://github.com/blakeblackshear/frigate/issues/6260)

@@ -2,64 +2,65 @@
 
 ## Project Reference
 
-See: .planning/PROJECT.md (updated 2026-02-01)
+See: .planning/PROJECT.md (updated 2026-02-02)
 
-**Core value:** Transcribe audio to text anywhere, offline, with a single command or API call
-**Current focus:** Planning next milestone
+**Core value:** Transcribe audio to text anywhere, offline, with a single command or API call — no cloud services, no API keys, no ongoing costs.
+**Current focus:** Phase 17: Cache Foundation
 
 ## Current Position
 
-Phase: (none — between milestones)
-Plan: Not started
-Status: Ready for `/gsd:new-milestone`
-Last activity: 2026-02-01 — v2.1 YouTube Transcription shipped
+Phase: 17 of 19 (Cache Foundation)
+Plan: Ready to plan
+Status: Ready to plan
+Last activity: 2026-02-02 - Roadmap created for v2.4 Idempotent Processing milestone
 
-Progress: v2.1 complete, next milestone not yet defined
+Progress: [████████████████░░░░] 84% (16/19 phases complete)
 
 ## Performance Metrics
 
 **Velocity:**
-- Total plans completed: 20 (v1.0: 3, v2.0: 7, v2.1: 7 + 3 prior milestones)
-- v2.1 average: ~3 min/plan
-- Total execution time: ~22 min for v2.1
+- Total plans completed: 36 (across v1.0-v2.3)
+- Average duration: ~3.0 min/plan
+- Total execution time: ~71 min total
 
 **By Milestone:**
 
-| Milestone | Phases | Plans | Duration |
-|-----------|--------|-------|----------|
-| v1.0 Package & CLI | 1 | 3 | 1 day |
-| v2.0 API | 4 | 7 | 1 day |
-| v2.1 YouTube | 3 | 7 | 2 days |
+| Milestone | Phases | Plans | Duration | Completed |
+|-----------|--------|-------|----------|-----------|
+| v1.0 | 1 | 3 | 1 day | 2026-01-23 |
+| v2.0 | 4 | 7 | 1 day | 2026-01-23 |
+| v2.1 | 3 | 7 | 2 days | 2026-02-01 |
+| v2.2 | 5 | 10 | 1 day | 2026-02-01 |
+| v2.3 | 3 | 9 | 2 days | 2026-02-02 |
+
+**v2.4 Progress:**
+- Phases: 0/3 complete
+- Plans: 0/? complete (TBD during planning)
+
+*Updated after each plan completion*
 
 ## Accumulated Context
 
 ### Decisions
 
-See PROJECT.md Key Decisions table for full history.
+Decisions are logged in PROJECT.md Key Decisions table.
+Recent decisions affecting current work:
 
-### Findings
-
-Summarized in PROJECT.md Current State.
+- v2.3: WhisperX unified pipeline for better alignment (simplifies architecture)
+- v2.2: TOML config files for default settings (~/.config/cesar/config.toml)
+- v2.0: SQLite for job persistence (WAL mode, busy_timeout)
+- v2.1: UUID-based temp filenames for collision-free concurrent downloads
 
 ### Pending Todos
 
-None.
+None yet.
 
 ### Blockers/Concerns
 
-None — milestone shipped successfully.
+- Pre-existing test failures in TestYouTubeErrorFormatting and TestCLIConfigLoading (mock issues with CliRunner)
 
 ## Session Continuity
 
-Last session: 2026-02-01
-Stopped at: v2.1 milestone complete
+Last session: 2026-02-02 (roadmap creation)
+Stopped at: Roadmap and STATE.md created, ready to plan Phase 17
 Resume file: None
-Next step: `/gsd:new-milestone` to start v2.2 planning
-
-## Milestone History
-
-- **v1.0 Package & CLI** — Shipped 2026-01-23 (1 phase, 3 plans)
-- **v2.0 API** — Shipped 2026-01-23 (4 phases, 7 plans)
-- **v2.1 YouTube Transcription** — Shipped 2026-02-01 (3 phases, 7 plans)
-
-See `.planning/MILESTONES.md` for full details.
