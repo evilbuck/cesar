@@ -6,8 +6,10 @@ from pathlib import Path
 from fastapi import FastAPI
 from fastapi.responses import FileResponse
 
-# Web frontend directory
-WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+import os
+
+# Web frontend directory - support Vercel deployment
+WEB_DIR = Path(os.environ.get("WEB_DIR", Path(__file__).resolve().parent.parent / "web"))
 
 app = FastAPI(title="Cesar - Audio Transcription")
 
