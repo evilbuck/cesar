@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cesar - Audio Transcription</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @keyframes pulse-slow { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .animate-pulse-slow { animation: pulse-slow 2s ease-in-out infinite; }
+    </style>
+</head>
+<body class="min-h-screen bg-gray-950 text-gray-100">
+    <div class="max-w-2xl mx-auto px-4 py-12">
+        <!-- Header -->
+        <header class="text-center mb-10">
+            <h1 class="text-4xl font-bold tracking-tight text-white">Cesar</h1>
+            <p class="mt-2 text-gray-400">Free offline audio transcription</p>
+        </header>
+
+        <!-- Input Tabs -->
+        <div class="bg-gray-900 rounded-xl border border-gray-800 overflow-hidden">
+            <div class="flex border-b border-gray-800">
+                <button id="tab-youtube" onclick="switchTab('youtube')"
+                    class="flex-1 py-3 px-4 text-sm font-medium text-white bg-gray-800 border-b-2 border-blue-500 transition-colors">
+                    YouTube URL
+                </button>
+                <button id="tab-upload" onclick="switchTab('upload')"
+                    class="flex-1 py-3 px-4 text-sm font-medium text-gray-400 hover:text-white transition-colors">
+                    Upload File
+                </button>
+            </div>
+
+            <div class="p-6">
+                <!-- YouTube URL Input -->
+                <div id="panel-youtube">
+                    <label for="youtube-url" class="block text-sm font-medium text-gray-300 mb-2">YouTube URL</label>
+                    <input id="youtube-url" type="url" placeholder="https://www.youtube.com/watch?v=..."
+                        class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent">
+                </div>
+
+                <!-- File Upload Input -->
+                <div id="panel-upload" class="hidden">
+                    <label for="file-input" class="block text-sm font-medium text-gray-300 mb-2">Audio File</label>
+                    <div id="drop-zone"
+                        class="border-2 border-dashed border-gray-700 rounded-lg p-8 text-center hover:border-gray-500 transition-colors cursor-pointer"
+                        onclick="document.getElementById('file-input').click()">
+                        <svg class="mx-auto h-10 w-10 text-gray-500 mb-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"
+                                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
+                        </svg>
+                        <p class="text-gray-400 text-sm">Drop audio file here or <span class="text-blue-400">browse</span></p>
+                        <p class="text-gray-600 text-xs mt-1">MP3, WAV, M4A, OGG, FLAC, AAC, WMA, WebM (max 100 MB)</p>
+                    </div>
+                    <input id="file-input" type="file" accept=".mp3,.wav,.m4a,.ogg,.flac,.aac,.wma,.webm" class="hidden">
+                    <p id="file-name" class="mt-2 text-sm text-gray-400 hidden"></p>
+                </div>
+
+                <!-- Model Selector -->
+                <div class="mt-4">
+                    <label for="model-select" class="block text-sm font-medium text-gray-300 mb-2">Model Size</label>
+                    <select id="model-select"
+                        class="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="tiny">Tiny - Fastest, lower accuracy</option>
+                        <option value="base" selected>Base - Good balance (recommended)</option>
+                        <option value="small">Small - Better accuracy</option>
+                        <option value="medium">Medium - High accuracy</option>
+                        <option value="large">Large - Best accuracy, slowest</option>
+                    </select>
+                </div>
+
+                <!-- Submit Button -->
+                <button id="submit-btn" onclick="submitJob()"
+                    class="mt-6 w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed">
+                    Transcribe
+                </button>
+            </div>
+        </div>
+
+        <!-- Progress Section -->
+        <div id="progress-section" class="hidden mt-6 bg-gray-900 rounded-xl border border-gray-800 p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-medium text-gray-300">Transcription Progress</h2>
+                <span id="progress-status" class="text-xs font-medium px-2 py-1 rounded-full bg-yellow-500/20 text-yellow-400">
+                    Queued
+                </span>
+            </div>
+            <div class="w-full bg-gray-800 rounded-full h-2">
+                <div id="progress-bar" class="bg-blue-500 h-2 rounded-full transition-all duration-500" style="width: 0%"></div>
+            </div>
+            <p id="progress-text" class="mt-2 text-xs text-gray-500">Waiting to start...</p>
+        </div>
+
+        <!-- Result Section -->
+        <div id="result-section" class="hidden mt-6 bg-gray-900 rounded-xl border border-gray-800 p-6">
+            <div class="flex items-center justify-between mb-3">
+                <h2 class="text-sm font-medium text-gray-300">Transcription Result</h2>
+                <div class="flex gap-2">
+                    <button onclick="copyResult()" title="Copy to clipboard"
+                        class="text-xs px-3 py-1 bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors">
+                        Copy
+                    </button>
+                    <button onclick="downloadResult()" title="Download as text file"
+                        class="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors">
+                        Download .txt
+                    </button>
+                </div>
+            </div>
+            <p id="result-language" class="text-xs text-gray-500 mb-2"></p>
+            <div id="result-text" class="bg-gray-800 rounded-lg p-4 text-sm text-gray-200 max-h-96 overflow-y-auto whitespace-pre-wrap"></div>
+        </div>
+
+        <!-- Error Section -->
+        <div id="error-section" class="hidden mt-6 bg-red-950/50 rounded-xl border border-red-900 p-6">
+            <h2 class="text-sm font-medium text-red-400 mb-2">Error</h2>
+            <p id="error-text" class="text-sm text-red-300"></p>
+            <button onclick="resetUI()"
+                class="mt-3 text-xs px-3 py-1 bg-red-900/50 hover:bg-red-900 text-red-300 rounded-lg transition-colors">
+                Try Again
+            </button>
+        </div>
+
+        <!-- Donation Section -->
+        <div class="mt-10 text-center">
+            <p class="text-sm text-gray-500">Cesar is free and open source.</p>
+            <p class="text-sm text-gray-500 mt-1">
+                If you find it useful, consider
+                <a href="https://github.com/evilbuck/transcribely" target="_blank" rel="noopener"
+                    class="text-blue-400 hover:text-blue-300 transition-colors">starring the project</a>
+                or supporting development.
+            </p>
+            <a href="https://buymeacoffee.com/" target="_blank" rel="noopener"
+                class="inline-block mt-3 px-4 py-2 bg-yellow-500/10 hover:bg-yellow-500/20 text-yellow-400 text-sm rounded-lg border border-yellow-500/30 transition-colors">
+                Buy me a coffee
+            </a>
+        </div>
+
+        <footer class="mt-10 text-center text-xs text-gray-600">
+            Powered by <a href="https://github.com/SYSTRAN/faster-whisper" class="text-gray-500 hover:text-gray-400">faster-whisper</a>
+            &middot; All processing happens on this server &middot; No data leaves this machine
+        </footer>
+    </div>
+
+    <script>
+        let currentTab = 'youtube';
+        let currentJobId = null;
+        let pollInterval = null;
+
+        function switchTab(tab) {
+            currentTab = tab;
+            const youtubeTab = document.getElementById('tab-youtube');
+            const uploadTab = document.getElementById('tab-upload');
+            const youtubePanel = document.getElementById('panel-youtube');
+            const uploadPanel = document.getElementById('panel-upload');
+
+            if (tab === 'youtube') {
+                youtubeTab.classList.add('text-white', 'bg-gray-800', 'border-b-2', 'border-blue-500');
+                youtubeTab.classList.remove('text-gray-400');
+                uploadTab.classList.remove('text-white', 'bg-gray-800', 'border-b-2', 'border-blue-500');
+                uploadTab.classList.add('text-gray-400');
+                youtubePanel.classList.remove('hidden');
+                uploadPanel.classList.add('hidden');
+            } else {
+                uploadTab.classList.add('text-white', 'bg-gray-800', 'border-b-2', 'border-blue-500');
+                uploadTab.classList.remove('text-gray-400');
+                youtubeTab.classList.remove('text-white', 'bg-gray-800', 'border-b-2', 'border-blue-500');
+                youtubeTab.classList.add('text-gray-400');
+                uploadPanel.classList.remove('hidden');
+                youtubePanel.classList.add('hidden');
+            }
+        }
+
+        // Drag and drop
+        const dropZone = document.getElementById('drop-zone');
+        const fileInput = document.getElementById('file-input');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('border-blue-500', 'bg-gray-800/50');
+        });
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('border-blue-500', 'bg-gray-800/50');
+        });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('border-blue-500', 'bg-gray-800/50');
+            if (e.dataTransfer.files.length) {
+                fileInput.files = e.dataTransfer.files;
+                showFileName(e.dataTransfer.files[0].name);
+            }
+        });
+        fileInput.addEventListener('change', () => {
+            if (fileInput.files.length) {
+                showFileName(fileInput.files[0].name);
+            }
+        });
+
+        function showFileName(name) {
+            const el = document.getElementById('file-name');
+            el.textContent = 'Selected: ' + name;
+            el.classList.remove('hidden');
+        }
+
+        async function submitJob() {
+            const btn = document.getElementById('submit-btn');
+            const model = document.getElementById('model-select').value;
+
+            btn.disabled = true;
+            btn.textContent = 'Submitting...';
+            hideAll();
+
+            try {
+                let response;
+                if (currentTab === 'youtube') {
+                    const url = document.getElementById('youtube-url').value.trim();
+                    if (!url) { showError('Please enter a YouTube URL.'); return; }
+                    response = await fetch('/transcribe/url', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ url, model })
+                    });
+                } else {
+                    const file = fileInput.files[0];
+                    if (!file) { showError('Please select an audio file.'); return; }
+                    const formData = new FormData();
+                    formData.append('file', file);
+                    formData.append('model', model);
+                    response = await fetch('/transcribe', {
+                        method: 'POST',
+                        body: formData
+                    });
+                }
+
+                if (!response.ok) {
+                    const err = await response.json().catch(() => ({ detail: 'Request failed' }));
+                    throw new Error(err.detail || err.message || 'Request failed');
+                }
+
+                const job = await response.json();
+                currentJobId = job.id;
+                showProgress(job);
+                startPolling();
+            } catch (e) {
+                showError(e.message);
+            } finally {
+                btn.disabled = false;
+                btn.textContent = 'Transcribe';
+            }
+        }
+
+        function startPolling() {
+            if (pollInterval) clearInterval(pollInterval);
+            pollInterval = setInterval(async () => {
+                if (!currentJobId) return;
+                try {
+                    const res = await fetch('/jobs/' + currentJobId);
+                    if (!res.ok) return;
+                    const job = await res.json();
+                    updateProgress(job);
+                    if (job.status === 'completed' || job.status === 'error') {
+                        clearInterval(pollInterval);
+                        pollInterval = null;
+                    }
+                } catch (_) { /* retry next interval */ }
+            }, 1500);
+        }
+
+        function showProgress(job) {
+            document.getElementById('progress-section').classList.remove('hidden');
+            updateProgress(job);
+        }
+
+        function updateProgress(job) {
+            const statusEl = document.getElementById('progress-status');
+            const barEl = document.getElementById('progress-bar');
+            const textEl = document.getElementById('progress-text');
+
+            const statusConfig = {
+                queued:      { label: 'Queued',      color: 'bg-yellow-500/20 text-yellow-400', pct: 5,   text: 'Waiting in queue...' },
+                downloading: { label: 'Downloading', color: 'bg-blue-500/20 text-blue-400',     pct: job.download_progress || 10, text: 'Downloading audio...' },
+                processing:  { label: 'Processing',  color: 'bg-purple-500/20 text-purple-400', pct: 60,  text: 'Transcribing audio...' },
+                completed:   { label: 'Complete',    color: 'bg-green-500/20 text-green-400',   pct: 100, text: 'Transcription complete!' },
+                error:       { label: 'Error',       color: 'bg-red-500/20 text-red-400',       pct: 100, text: 'Transcription failed.' },
+            };
+
+            const cfg = statusConfig[job.status] || statusConfig.queued;
+            statusEl.textContent = cfg.label;
+            statusEl.className = 'text-xs font-medium px-2 py-1 rounded-full ' + cfg.color;
+            barEl.style.width = cfg.pct + '%';
+            barEl.className = 'h-2 rounded-full transition-all duration-500 ' +
+                (job.status === 'error' ? 'bg-red-500' : job.status === 'completed' ? 'bg-green-500' : 'bg-blue-500');
+            textEl.textContent = cfg.text;
+
+            if (job.status === 'processing') {
+                barEl.classList.add('animate-pulse-slow');
+            } else {
+                barEl.classList.remove('animate-pulse-slow');
+            }
+
+            if (job.status === 'completed' && job.result_text) {
+                showResult(job);
+            }
+            if (job.status === 'error') {
+                showError(job.error_message || 'Unknown error occurred.');
+            }
+        }
+
+        function showResult(job) {
+            const section = document.getElementById('result-section');
+            const textEl = document.getElementById('result-text');
+            const langEl = document.getElementById('result-language');
+
+            textEl.textContent = job.result_text;
+            if (job.detected_language) {
+                langEl.textContent = 'Detected language: ' + job.detected_language;
+            }
+            section.classList.remove('hidden');
+        }
+
+        function copyResult() {
+            const text = document.getElementById('result-text').textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                const btn = event.target;
+                const orig = btn.textContent;
+                btn.textContent = 'Copied!';
+                setTimeout(() => btn.textContent = orig, 1500);
+            });
+        }
+
+        function downloadResult() {
+            const text = document.getElementById('result-text').textContent;
+            const blob = new Blob([text], { type: 'text/plain' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = 'transcription.txt';
+            a.click();
+            URL.revokeObjectURL(url);
+        }
+
+        function showError(msg) {
+            document.getElementById('error-text').textContent = msg;
+            document.getElementById('error-section').classList.remove('hidden');
+            const btn = document.getElementById('submit-btn');
+            btn.disabled = false;
+            btn.textContent = 'Transcribe';
+        }
+
+        function hideAll() {
+            document.getElementById('progress-section').classList.add('hidden');
+            document.getElementById('result-section').classList.add('hidden');
+            document.getElementById('error-section').classList.add('hidden');
+        }
+
+        function resetUI() {
+            hideAll();
+            currentJobId = null;
+            if (pollInterval) { clearInterval(pollInterval); pollInterval = null; }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,13 @@
+[
+  {
+    "agent_id": "orchestrator-main",
+    "tool_id": "orchestrator-main",
+    "agent_type": "orchestrator",
+    "model": "sonnet",
+    "current_task": "Write: /home/buckleyrobinson/projects/transcribely/tests/test_web.py",
+    "status": "active",
+    "spawned_at": "2026-03-02T01:09:25.709455Z",
+    "tasks_completed": [],
+    "tool_count": 31
+  }
+]

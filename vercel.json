@@ -1,0 +1,14 @@
+{
+  "builds": [
+    {
+      "src": "cesar/api/server.py",
+      "use": "@vercel/python"
+    }
+  ],
+  "routes": [
+    {
+      "src": "/(.*)",
+      "dest": "cesar/api/server.py"
+    }
+  ]
+}

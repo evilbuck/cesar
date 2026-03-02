@@ -1,0 +1,10 @@
+{
+  "id": "iteration-1",
+  "type": "iteration",
+  "title": "Iteration 1",
+  "description": "PRD: /tmp/opencode-prd-ZMXiZI.md",
+  "status": "in_progress",
+  "priority": "medium",
+  "startedAt": "2026-03-02T01:09:25Z",
+  "provider": "claude"
+}

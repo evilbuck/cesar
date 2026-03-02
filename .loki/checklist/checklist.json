@@ -1,0 +1,150 @@
+{
+  "prd": "Build a web application for audio transcription from YouTube and file uploads",
+  "categories": [
+    {
+      "name": "Backend",
+      "items": [
+        {
+          "id": "backend-api",
+          "title": "FastAPI backend with faster-whisper",
+          "description": "Python backend using faster-whisper for transcription",
+          "priority": "critical",
+          "status": "done",
+          "checks": [
+            {"type": "file_exists", "path": "cesar/api/server.py"},
+            {"type": "file_exists", "path": "cesar/api/worker.py"},
+            {"type": "file_contains", "path": "cesar/api/server.py", "pattern": "FastAPI"}
+          ]
+        },
+        {
+          "id": "backend-youtube",
+          "title": "YouTube URL support via yt-dlp",
+          "description": "Support YouTube URL input for transcription",
+          "priority": "critical",
+          "status": "done",
+          "checks": [
+            {"type": "file_exists", "path": "cesar/youtube_handler.py"},
+            {"type": "file_contains", "path": "cesar/api/server.py", "pattern": "youtube"}
+          ]
+        },
+        {
+          "id": "backend-static-serving",
+          "title": "Static file serving for frontend",
+          "description": "Serve HTML/CSS/JS static files from FastAPI",
+          "priority": "critical",
+          "status": "pending",
+          "checks": [
+            {"type": "file_contains", "path": "cesar/api/server.py", "pattern": "StaticFiles"},
+            {"type": "file_exists", "path": "cesar/web/index.html"}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Frontend",
+      "items": [
+        {
+          "id": "frontend-html",
+          "title": "HTML frontend with Tailwind CSS",
+          "description": "Simple, clean HTML frontend styled with Tailwind CSS",
+          "priority": "critical",
+          "status": "pending",
+          "checks": [
+            {"type": "file_exists", "path": "cesar/web/index.html"},
+            {"type": "file_contains", "path": "cesar/web/index.html", "pattern": "tailwindcss"}
+          ]
+        },
+        {
+          "id": "frontend-youtube-input",
+          "title": "YouTube URL paste input",
+          "description": "Input field to paste YouTube URL for transcription",
+          "priority": "critical",
+          "status": "pending",
+          "checks": [
+            {"type": "file_contains", "path": "cesar/web/index.html", "pattern": "youtube"}
+          ]
+        },
+        {
+          "id": "frontend-file-upload",
+          "title": "Audio file upload",
+          "description": "File upload input for audio files",
+          "priority": "critical",
+          "status": "pending",
+          "checks": [
+            {"type": "file_contains", "path": "cesar/web/index.html", "pattern": "upload"}
+          ]
+        },
+        {
+          "id": "frontend-model-selector",
+          "title": "Whisper model size selector",
+          "description": "Dropdown/selector to choose Whisper model size",
+          "priority": "major",
+          "status": "pending",
+          "checks": [
+            {"type": "file_contains", "path": "cesar/web/index.html", "pattern": "model"}
+          ]
+        },
+        {
+          "id": "frontend-progress",
+          "title": "Transcription progress display",
+          "description": "Show transcription progress to user",
+          "priority": "critical",
+          "status": "pending",
+          "checks": [
+            {"type": "file_contains", "path": "cesar/web/index.html", "pattern": "progress"}
+          ]
+        },
+        {
+          "id": "frontend-download",
+          "title": "Download result as text file",
+          "description": "Button to download transcription result as .txt",
+          "priority": "critical",
+          "status": "pending",
+          "checks": [
+            {"type": "file_contains", "path": "cesar/web/index.html", "pattern": "download"}
+          ]
+        },
+        {
+          "id": "frontend-donation",
+          "title": "Optional donation section",
+          "description": "Free with optional donation link/section",
+          "priority": "minor",
+          "status": "pending",
+          "checks": [
+            {"type": "file_contains", "path": "cesar/web/index.html", "pattern": "donat"}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Deployment",
+      "items": [
+        {
+          "id": "deploy-vercel",
+          "title": "Vercel deployment configuration",
+          "description": "Configure project for Vercel hosting",
+          "priority": "major",
+          "status": "pending",
+          "checks": [
+            {"type": "file_exists", "path": "vercel.json"}
+          ]
+        }
+      ]
+    },
+    {
+      "name": "Testing",
+      "items": [
+        {
+          "id": "test-frontend-integration",
+          "title": "Frontend integration tests",
+          "description": "Tests verifying frontend serves correctly and interacts with API",
+          "priority": "major",
+          "status": "pending",
+          "checks": [
+            {"type": "file_exists", "path": "tests/test_web.py"}
+          ]
+        }
+      ]
+    }
+  ]
+}

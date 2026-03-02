@@ -12,7 +12,8 @@ from typing import List, Optional
 
 from fastapi import FastAPI, Form, HTTPException, Request, UploadFile, status
 from fastapi import Path as PathParam
-from fastapi.responses import JSONResponse
+from fastapi.responses import FileResponse, JSONResponse
+from fastapi.staticfiles import StaticFiles
 
 from pydantic import BaseModel
 
@@ -86,6 +87,15 @@ app = FastAPI(
     version="2.0.0",
     lifespan=lifespan,
 )
+
+# Web frontend directory
+WEB_DIR = Path(__file__).resolve().parent.parent / "web"
+
+
+@app.get("/", include_in_schema=False)
+async def serve_frontend():
+    """Serve the web frontend."""
+    return FileResponse(WEB_DIR / "index.html")
 
 
 @app.exception_handler(YouTubeDownloadError)

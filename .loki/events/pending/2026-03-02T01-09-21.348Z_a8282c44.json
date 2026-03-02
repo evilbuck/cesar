@@ -1,0 +1,8 @@
+{
+  "id": "a8282c44",
+  "type": "session",
+  "source": "cli",
+  "timestamp": "2026-03-02T01:09:21.348Z",
+  "payload": {"action":"start","provider":"claude","prd_path":"/tmp/opencode-prd-ZMXiZI.md"},
+  "version": "1.0"
+}

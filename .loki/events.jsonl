@@ -1,0 +1,2 @@
+{"timestamp":"2026-03-02T01:09:25Z","type":"session_start","data":{"provider":"claude","prd":"/tmp/opencode-prd-ZMXiZI.md","parallel":false,"complexity":"standard","pid":3254922}}
+{"timestamp":"2026-03-02T01:09:25Z","type":"iteration_start","data":{"iteration":1,"provider":"claude","prd":"/tmp/opencode-prd-ZMXiZI.md"}}

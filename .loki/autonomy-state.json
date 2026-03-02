@@ -1,0 +1,10 @@
+{
+    "retryCount": 0,
+    "status": "running",
+    "lastExitCode": 0,
+    "lastRun": "2026-03-02T01:09:25Z",
+    "prdPath": "/tmp/opencode-prd-ZMXiZI.md",
+    "pid": 3254922,
+    "maxRetries": 50,
+    "baseWait": 60
+}

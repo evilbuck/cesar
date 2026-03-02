@@ -1,0 +1,66 @@
+{
+  "timestamp": "2026-03-02T01:12:20Z",
+  "version": "6.4.0",
+  "project": {
+    "name": "transcribely",
+    "path": "/home/buckleyrobinson/projects/transcribely"
+  },
+  "mode": "autonomous",
+  "provider": "claude",
+  "phase": "BOOTSTRAP",
+  "complexity": "standard",
+  "iteration": 0,
+  "startedAt": "2026-03-02T01:09:21Z",
+  "rarv": {
+    "currentStep": 0,
+    "stages": ["reason", "act", "reflect", "verify"]
+  },
+  "tasks": {
+    "pending": [],
+    "inProgress": [
+  {
+    "id": "todo-0",
+    "type": "todo",
+    "payload": {
+      "action": "Configure for Vercel deployment"
+    }
+  }
+],
+    "review": [],
+    "completed": [],
+    "failed": []
+  },
+  "agents": [],
+  "metrics": {
+    "tasksCompleted": 0,
+    "tasksFailed": 0,
+    "cpuUsage": 59,
+    "memoryUsage": 57,
+    "resourceStatus": "ok"
+  },
+  "memory": {
+    "episodic": 0,
+    "semantic": 0,
+    "procedural": 0
+  },
+  "qualityGates": null,
+  "council": {
+    "initialized": true,
+    "enabled": true,
+    "total_votes": 0,
+    "approve_votes": 0,
+    "reject_votes": 0,
+    "last_check_iteration": 0,
+    "consecutive_no_change": 0,
+    "done_signals": 0,
+    "convergence_history": [],
+    "verdicts": []
+},
+  "checklist": null,
+  "appRunner": {"status":"not_initialized"},
+  "playwright": null,
+  "budget": null,
+  "context": null,
+  "tokens": null,
+  "notifications": {"total":0,"unacknowledged":0,"critical":0,"warning":0,"info":0}
+}
