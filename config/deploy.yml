@@ -1,0 +1,55 @@
+# Kamal 2 Deployment Configuration for Cesar Transcription Service
+
+service: cesar
+image: releaseoften/cesar
+
+# Deploy to these servers
+servers:
+  web:
+    - YOUR_VPS_IP_HERE  # Replace with your Hostinger VPS IP
+
+# Enable SSL auto certification via Let's Encrypt
+proxy:
+  ssl: true
+  host: transcribe.yourdomain.com  # Replace with your domain
+  healthcheck:
+    path: /health
+    interval: 10
+    timeout: 30
+
+# Docker registry credentials
+registry:
+  server: registry.digitalocean.com
+  username: releaseoften
+  password:
+    - KAMAL_REGISTRY_PASSWORD
+
+# Environment variables
+env:
+  secret:
+    # Add any secret keys here
+  clear:
+    CESAR_HOST: "0.0.0.0"
+    CESAR_PORT: "8000"
+    CESAR_DB_PATH: "/app/data/jobs.db"
+    WEB_DIR: "/app/cesar/web"
+    PYTHONUNBUFFERED: "1"
+
+# Persistent storage for job database and cache
+volumes:
+  - "cesar_data:/app/data"
+  - "cesar_cache:/app/.cache"
+
+# Configure the image builder
+builder:
+  arch: amd64
+  args:
+    GIT_COMMIT: "$(git rev-parse HEAD)"
+    GIT_BRANCH: "$(git rev-parse --abbrev-ref HEAD)"
+    BUILD_DATE: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+# Aliases for common commands
+aliases:
+  shell: app exec --interactive --reuse "bash"
+  logs: app logs -f
+  python: app exec --interactive --reuse "python"

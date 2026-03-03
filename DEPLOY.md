@@ -2,6 +2,30 @@
 
 Deploy Cesar Transcription Service on a VPS (Hostinger, DigitalOcean, etc.)
 
+**Recommended: Use Kamal 2 for deployment** - see [KAMAL.md](KAMAL.md)
+
+## Quick Deploy (with Kamal)
+
+```bash
+# 1. Install Kamal
+gem install kamal
+
+# 2. Set registry password
+export KAMAL_REGISTRY_PASSWORD=your_token
+
+# 3. Update config/deploy.yml with your VPS IP and domain
+
+# 4. Deploy
+kamal setup
+kamal deploy
+```
+
+**Full Kamal docs:** [KAMAL.md](KAMAL.md)
+
+---
+
+## Alternative: Manual Deploy
+
 ## Hardware Requirements
 
 | Component | Minimum | Recommended |
