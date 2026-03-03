@@ -11,7 +11,7 @@ servers:
 # Enable SSL auto certification via Let's Encrypt
 proxy:
   ssl: true
-  host: transcribe.yourdomain.com  # Replace with your domain
+  host: transcribely.releaseoften.com
   healthcheck:
     path: /health
     interval: 10
