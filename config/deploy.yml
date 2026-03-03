@@ -17,10 +17,11 @@ proxy:
     interval: 10
     timeout: 30
 
-# Docker registry credentials (private registry on Proxmox)
+# Docker registry credentials (Proxmox LXC 104)
+# Docs: docs/registry-reference.md
 registry:
-  server: registry.100.83.73.13.nip.io
-  username: admin
+  server: 100.83.73.13:5000
+  username: buck
   password:
     - KAMAL_REGISTRY_PASSWORD
 
