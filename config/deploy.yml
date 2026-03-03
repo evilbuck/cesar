@@ -6,7 +6,7 @@ image: releaseoften/cesar
 # Deploy to these servers
 servers:
   web:
-    - YOUR_VPS_IP_HERE  # Replace with your Hostinger VPS IP
+    - 72.60.126.128
 
 # Enable SSL auto certification via Let's Encrypt
 proxy:
