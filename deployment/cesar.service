@@ -1,0 +1,23 @@
+[Unit]
+Description=Cesar Transcription Service
+After=network.target
+
+[Service]
+Type=simple
+User=www-data
+Group=www-data
+WorkingDirectory=/var/www/cesar
+Environment="PATH=/var/www/cesar/venv/bin"
+Environment="CESAR_HOST=0.0.0.0"
+Environment="CESAR_PORT=8000"
+Environment="CESAR_DB_PATH=/var/www/cesar/data/jobs.db"
+Environment="WEB_DIR=/var/www/cesar/cesar/web"
+Environment="PYTHONUNBUFFERED=1"
+
+ExecStart=/var/www/cesar/venv/bin/uvicorn cesar.api.server:app --host 0.0.0.0 --port 8000 --workers 1
+ExecReload=/bin/kill -HUP $MAINPID
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

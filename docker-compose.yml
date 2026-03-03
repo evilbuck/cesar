@@ -1,0 +1,27 @@
+version: '3.8'
+
+services:
+  cesar:
+    build: .
+    container_name: cesar-transcription
+    ports:
+      - "8000:8000"
+    environment:
+      - CESAR_HOST=0.0.0.0
+      - CESAR_PORT=8000
+      - CESAR_DB_PATH=/app/data/jobs.db
+      - WEB_DIR=/app/cesar/web
+      - PYTHONUNBUFFERED=1
+    volumes:
+      - ./data:/app/data
+      - cesar-cache:/app/.cache
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  cesar-cache:
