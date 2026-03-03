@@ -1,7 +1,7 @@
 # Kamal 2 Deployment Configuration for Cesar Transcription Service
 
 service: cesar
-image: releaseoften/cesar
+image: cesar
 
 # Deploy to these servers
 servers:
@@ -17,10 +17,10 @@ proxy:
     interval: 10
     timeout: 30
 
-# Docker registry credentials
+# Docker registry credentials (private registry on Proxmox)
 registry:
-  server: registry.digitalocean.com
-  username: releaseoften
+  server: registry.100.83.73.13.nip.io
+  username: admin
   password:
     - KAMAL_REGISTRY_PASSWORD
 
