@@ -1,2 +1,4 @@
 [tools]
+1password = "latest"
 python = "3.12"
+ruby = "latest"

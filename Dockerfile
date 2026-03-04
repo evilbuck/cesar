@@ -27,9 +27,9 @@ ENV PIP_NO_CACHE_DIR=1
 # Production stage
 FROM base AS production
 
-# Copy requirements first for better caching
-COPY requirements.txt pyproject.toml ./
-RUN pip install --no-cache-dir -r requirements.txt
+# Copy CPU-only requirements for production (smaller image, no GPU packages)
+COPY requirements-cpu.txt pyproject.toml ./
+RUN pip install --no-cache-dir -r requirements-cpu.txt
 
 # Copy application code
 COPY cesar/ ./cesar/

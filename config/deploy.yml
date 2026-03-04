@@ -25,10 +25,9 @@ registry:
   password:
     - KAMAL_REGISTRY_PASSWORD
 
+
 # Environment variables
 env:
-  secret:
-    # Add any secret keys here
   clear:
     CESAR_HOST: "0.0.0.0"
     CESAR_PORT: "8000"
