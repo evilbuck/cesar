@@ -5,16 +5,59 @@ Provides validated configuration loading from TOML files with clear error
 messages. Supports hierarchical configuration: CLI and API can use different
 config files with CLI arguments always overriding config values.
 """
+
 from pathlib import Path
 from typing import Optional
 import tomllib
 
-from pydantic import BaseModel, ConfigDict, ValidationError, field_validator, model_validator
+from pydantic import (
+    BaseModel,
+    ConfigDict,
+    ValidationError,
+    field_validator,
+    model_validator,
+)
 
 
 class ConfigError(Exception):
     """Exception raised for configuration errors."""
+
     pass
+
+
+def get_default_cache_dir() -> Path:
+    """Get the default cache directory (XDG-compliant).
+
+    Returns:
+        Path: ~/.cache/cesar/
+    """
+    import os
+
+    xdg_cache = os.environ.get("XDG_CACHE_HOME")
+    if xdg_cache:
+        base = Path(xdg_cache)
+    else:
+        base = Path.home() / ".cache"
+    return base / "cesar"
+
+
+def get_cache_dir(config: Optional["CesarConfig"] = None) -> Path:
+    """Get the cache directory path.
+
+    Args:
+        config: Optional CesarConfig instance with cache_dir setting
+
+    Returns:
+        Path to the cache directory, created if it doesn't exist
+    """
+    if config is not None and config.cache_dir is not None:
+        cache_dir = Path(config.cache_dir)
+    else:
+        cache_dir = get_default_cache_dir()
+
+    # Ensure directory exists
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir
 
 
 class CesarConfig(BaseModel):
@@ -25,10 +68,11 @@ class CesarConfig(BaseModel):
         min_speakers: Minimum number of speakers to detect (must be >= 1 if set)
         max_speakers: Maximum number of speakers to detect (must be >= 1 if set)
         hf_token: HuggingFace token for pyannote model download
+        cache_dir: Custom cache directory path (must be absolute if set)
     """
 
     model_config = ConfigDict(
-        extra='forbid',  # Reject unknown keys to catch typos
+        extra="forbid",  # Reject unknown keys to catch typos
         str_strip_whitespace=True,
     )
 
@@ -36,8 +80,22 @@ class CesarConfig(BaseModel):
     min_speakers: Optional[int] = None
     max_speakers: Optional[int] = None
     hf_token: Optional[str] = None
+    cache_dir: Optional[str] = None
 
-    @field_validator('min_speakers', 'max_speakers')
+    @field_validator("cache_dir")
+    @classmethod
+    def validate_cache_dir(cls, v: Optional[str], info) -> Optional[str]:
+        """Validate cache_dir is an absolute path if set."""
+        if v is not None:
+            path = Path(v)
+            if not path.is_absolute():
+                raise ValueError(
+                    f"Invalid value for '{info.field_name}': expected absolute path, "
+                    f"got relative path '{v}'. Example: {info.field_name} = '/mnt/bigdisk/cesar-cache'"
+                )
+        return v
+
+    @field_validator("min_speakers", "max_speakers")
     @classmethod
     def validate_speaker_count(cls, v: Optional[int], info) -> Optional[int]:
         """Validate speaker counts are >= 1 if set."""
@@ -48,12 +106,14 @@ class CesarConfig(BaseModel):
             )
         return v
 
-    @model_validator(mode='after')
-    def validate_speaker_range(self) -> 'CesarConfig':
+    @model_validator(mode="after")
+    def validate_speaker_range(self) -> "CesarConfig":
         """Ensure min_speakers <= max_speakers when both are set."""
-        if (self.min_speakers is not None and
-            self.max_speakers is not None and
-            self.min_speakers > self.max_speakers):
+        if (
+            self.min_speakers is not None
+            and self.max_speakers is not None
+            and self.min_speakers > self.max_speakers
+        ):
             raise ValueError(
                 f"Invalid speaker range: min_speakers ({self.min_speakers}) "
                 f"cannot be greater than max_speakers ({self.max_speakers}). "
@@ -101,12 +161,10 @@ def load_config(config_path: Path) -> CesarConfig:
 
     # Load and parse TOML
     try:
-        with open(config_path, 'rb') as f:
+        with open(config_path, "rb") as f:
             config_data = tomllib.load(f)
     except tomllib.TOMLDecodeError as e:
-        raise ConfigError(
-            f"Invalid TOML syntax in {config_path}: {str(e)}"
-        ) from e
+        raise ConfigError(f"Invalid TOML syntax in {config_path}: {str(e)}") from e
 
     # Validate with Pydantic
     try:
@@ -115,13 +173,12 @@ def load_config(config_path: Path) -> CesarConfig:
         # Format validation errors user-friendly
         errors = []
         for error in e.errors():
-            field = error['loc'][0] if error['loc'] else 'unknown'
-            msg = error['msg']
+            field = error["loc"][0] if error["loc"] else "unknown"
+            msg = error["msg"]
             errors.append(f"  - {field}: {msg}")
 
         raise ConfigError(
-            f"Configuration validation failed in {config_path}:\n" +
-            "\n".join(errors)
+            f"Configuration validation failed in {config_path}:\n" + "\n".join(errors)
         ) from e
 
 
@@ -159,6 +216,11 @@ diarize = false
 # Accept model conditions at: https://hf.co/pyannote/speaker-diarization-3.1
 # Default: use cached token from ~/.cache/huggingface/token
 # Example: hf_token = "hf_xxxxx"
+
+# Cache directory for downloaded audio and intermediate artifacts
+# If not specified, uses XDG standard: ~/.cache/cesar/
+# Default: auto (use XDG)
+# Example: cache_dir = "/mnt/bigdisk/cesar-cache"
 """
 
 
