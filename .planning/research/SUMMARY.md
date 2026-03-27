@@ -1,191 +1,309 @@
 # Project Research Summary
 
-**Project:** Cesar (Offline Audio Transcription CLI)
-**Domain:** Python CLI packaging for pip/pipx distribution
-**Researched:** 2026-01-23
+**Project:** Cesar v2.4 Idempotent Processing
+**Domain:** Offline audio transcription with artifact caching
+**Researched:** 2026-02-02
 **Confidence:** HIGH
 
 ## Executive Summary
 
-Cesar is an existing, functional offline audio transcription CLI tool built with faster-whisper, Click, and Rich. The project goal is to make it installable via `pipx install git+<url>` with a proper subcommand structure (`cesar transcribe`). This is a well-understood domain with established patterns: modern Python packaging uses `pyproject.toml` (PEP 517/518/621) with a `src/` layout, console script entry points, and package-qualified imports.
+Cesar v2.4 adds artifact caching and idempotent processing to a multi-stage audio transcription pipeline (Download → Transcription → Diarization → Formatting). Expert systems in this domain (Docker, npm, ffmpeg) use content-addressable storage with stage-level caching to enable resumption from failure points. The recommended approach extends Cesar's existing SQLite infrastructure rather than introducing new dependencies, using a hybrid storage model: SQLite BLOBs for small artifacts (<100KB) and filesystem for large artifacts (>=100KB).
 
-The recommended approach is to use **setuptools** as the build backend (already in the project's environment, battle-tested, universal compatibility) with a `src/cesar/` package layout. The current flat file structure with sibling imports (`from transcriber import AudioTranscriber`) is the primary technical obstacle - these imports will fail after packaging. The migration requires moving all source files into `src/cesar/`, converting imports to package-qualified form, and configuring entry points.
+The architecture centers on a CacheManager component that integrates with the existing TranscriptionOrchestrator, providing transparent caching without breaking backward compatibility. Cache keys use SHA-256 content hashing to ensure deterministic lookup, while atomic write operations prevent corruption during failures. For URL-based sources, time-step functions (15-minute windows) balance freshness with cache efficiency.
 
-Key risks are centered on the first-run experience rather than packaging mechanics. The tool has two external dependencies that cannot be expressed in Python packaging: **ffprobe** (for audio duration) and **whisper models** (75MB-3GB downloads on first use). Both require clear error messages and user prompts. The packaging itself is straightforward once imports are corrected; the main pitfall is testing only in development mode where flat imports still work.
+Critical risks center on cache corruption from partial writes, stale content from URLs, and concurrent access race conditions. Prevention requires atomic file operations (temp-then-rename pattern), file-based locking for concurrent writes, and careful cache invalidation strategies. Testing must include failure injection (kill signals, disk exhaustion) to validate resilience patterns.
 
 ## Key Findings
 
 ### Recommended Stack
 
-Use setuptools with `pyproject.toml` as the sole configuration file. This is the most conservative choice: setuptools is already installed (80.9.0), is universally tested with pip/pipx, and requires no new tools to learn.
+Research revealed that extending Cesar's existing SQLite (aiosqlite) infrastructure is superior to introducing new caching libraries. SQLite is 35% faster than filesystem storage for small BLOBs (<100KB), handles concurrent access via WAL mode, and integrates seamlessly with existing job persistence patterns. The hybrid approach leverages both SQLite and filesystem storage, choosing the optimal storage backend based on artifact size.
 
 **Core technologies:**
-- **setuptools>=70.0.0**: Build backend - already installed, universal pip/pipx compatibility
-- **pyproject.toml**: Single configuration file - PEP 517/518/621 standard, replaces setup.py/setup.cfg
-- **src/ layout**: Package structure - prevents import confusion, catches packaging bugs during development
+- **aiosqlite 0.22.0+** (existing): Cache metadata and small artifacts — already in stack, proven reliable, 35% faster than filesystem for small BLOBs
+- **stdlib hashlib** (built-in): SHA-256 content hashing — zero dependencies, formally verified HACL* implementation, excellent performance
+- **stdlib pathlib/tempfile** (built-in): Cache directory management and atomic writes — cross-platform, type-safe, native atomic operations via os.replace()
+- **filelock 3.20.3** (optional): Cross-platform file locking for concurrent writes — defer until needed, SQLite WAL handles read concurrency
 
-**Do not use:**
-- Poetry or PDM (overkill for adding packaging to existing project)
-- setup.py alone (deprecated)
-- Flat layout (import confusion during development)
+**Total new dependencies: 0** for MVP (uses stdlib + existing aiosqlite). Optional filelock only if concurrent writes to filesystem artifacts become necessary.
 
 ### Expected Features
 
+Caching in CLI tools follows predictable patterns established by Docker, npm, pip, and other developer tools. Users expect transparent caching with manual override capabilities, automatic cache directory creation, and reasonable defaults for cache expiration and size management.
+
 **Must have (table stakes):**
-- `pyproject.toml` with build system and dependencies
-- `[project.scripts]` entry point for `cesar` command
-- Package structure with `__init__.py` and proper imports
-- Single source of truth for version
-- Declared dependencies (convert from requirements.txt)
+- Skip reprocessing identical inputs — hash-based cache keys prevent redundant work
+- --no-cache flag — universal override pattern users expect
+- Cache location visibility — users need to know where cache lives for manual cleanup
+- Automatic cache directory creation — user shouldn't create ~/.cache/cesar/ manually
+- Cache survives crashes — atomic writes ensure cache integrity after failures
+- Reasonable cache expiration — URL content changes over time, needs time-step function
 
 **Should have (competitive):**
-- Subcommand structure (`cesar transcribe`) for future expansion
-- First-run model download prompt with size estimate
-- Clear ffprobe error message with install instructions
-- Shell completion support (Click has built-in support)
+- --cache-info flag — inspect cache without side effects (location, size, hit/miss stats)
+- Resume from failure point — save minutes on retry by skipping successful stages
+- Time-step function for URLs — smart freshness with 15-minute windows, not second-level precision
+- Smart extension correction — auto-fix .txt to .md when diarize=True (already implemented in v2.2)
+- Verbose logging — cache hit/miss visibility for debugging
 
 **Defer (v2+):**
-- Config file support (~/.config/cesar/config.toml)
-- Machine-readable output (--format json)
-- Progress persistence for interrupted transcriptions
-- Plugin architecture
+- cesar cache clean — manual cache purge command (users can delete ~/.cache/cesar/ manually)
+- --invalidate-stage — granular invalidation (--no-cache covers 80% of use cases)
+- cesar cache warm — pre-download models (models auto-download on first use already)
+- --dry-run — show cache behavior without execution (debugging feature, not core)
+- LRU eviction — automatic cache size management (complexity, manual cleanup sufficient for v2.4)
 
 ### Architecture Approach
 
-Restructure from flat Python files to `src/cesar/` package layout. This is a mechanical refactor: move files, update imports, add `__init__.py` and `__main__.py`, configure pyproject.toml. The existing component boundaries (cli.py, transcriber.py, device_detection.py, utils.py) are already well-defined and require no architectural changes.
+The recommended architecture introduces a CacheManager component that integrates with the existing TranscriptionOrchestrator while maintaining backward compatibility. The orchestrator checks cache before each expensive pipeline stage (transcription, diarization), uses cached results when available, and stores successful outputs for future use. This preserves Cesar's existing graceful degradation patterns (diarization failure falls back to cached transcription).
 
-**Major components (unchanged responsibilities):**
-1. **cli.py** - Click CLI with Rich output, argument parsing, progress display
-2. **transcriber.py** - AudioTranscriber class, model management, transcription orchestration
-3. **device_detection.py** - Hardware detection, optimal configuration selection
-4. **utils.py** - Time formatting, validation helpers
+**Major components:**
+1. **CacheManager** — content-addressable storage with hybrid backend (SQLite + filesystem), SHA-256 key generation, atomic write operations, and cache metadata tracking
+2. **TranscriptionOrchestrator (modified)** — accepts optional cache_manager parameter, checks cache before each stage, stores successful outputs, preserves existing behavior when cache_manager is None
+3. **BackgroundWorker (modified)** — passes cache_manager to orchestrator, handles retry scenarios with cache invalidation, tracks cache usage metrics in job metadata
+4. **Cache Repository** — extends existing JobRepository patterns, shares database file (~/.local/share/cesar/jobs.db), follows established aiosqlite async/await patterns
 
-**Key patterns to follow:**
-- Lazy loading of heavy dependencies (faster-whisper, torch) - already implemented
-- Optional dependency handling with graceful fallback - already implemented
-- Version from single source using `importlib.metadata`
+**Storage structure:**
+```
+~/.cache/cesar/artifacts/
+  ├── transcription/{hash[:2]}/{hash}.json  (SQLite BLOB if <100KB)
+  ├── diarization/{hash[:2]}/{hash}.json    (SQLite BLOB if <100KB)
+  └── audio/{hash[:2]}/{hash}.m4a           (filesystem, always >100KB)
+
+~/.local/share/cesar/jobs.db
+  └── cache_entries table (metadata for all cached artifacts)
+```
 
 ### Critical Pitfalls
 
-1. **Relative imports break after packaging** - Current `from transcriber import AudioTranscriber` fails when installed. Must convert all to `from cesar.transcriber import AudioTranscriber`. This affects cli.py, transcriber.py, and all test files. Address first.
+Research identified 11 pitfalls from production systems (yt-dlp, ffmpeg, pip), with 5 rated as critical.
 
-2. **Test imports fail after restructure** - Tests use same flat import style. Must update test imports and run tests against installed package (`pip install -e .`) not source files.
+1. **Cache corruption from partial writes** — System crashes during cache write leave partial/corrupted files that appear valid but contain invalid data. Prevention: write-to-temp-then-rename pattern using stdlib os.replace() for atomic operations, validate before caching, cleanup orphaned .tmp files on startup.
 
-3. **ffprobe not found** - External binary dependency that Python packaging cannot express. Must check at startup and provide clear error with install instructions.
+2. **Cache invalidation failures (stale URL content)** — YouTube videos updated/replaced but cache returns old transcription because URL-based keys don't detect content changes. Prevention: time-step function for URLs (15-minute buckets), HTTP conditional requests (ETag/Last-Modified), configurable TTL defaults (24 hours for URLs, infinite for local files).
 
-4. **Model download without consent** - 75MB-3GB downloads on first use. Must check cache first, prompt with size estimate, show progress.
+3. **Concurrent access race conditions** — Multiple API requests for same URL run simultaneously, all check cache (miss), all start download, all write to same cache key causing corruption. Prevention: file-based locking with filelock library (timeout + fallback), in-process request coalescing for single-instance API, cache directory sharding to reduce contention.
 
-5. **PyTorch installation size** - ~2GB download as transitive dependency of faster-whisper. Document install time expectations; cannot easily avoid.
+4. **Disk space exhaustion** — Cache grows unbounded until disk fills, system crashes, user confusion about hidden cache. Prevention: size-based eviction (10GB default limit), LRU eviction when exceeding threshold, cleanup commands (cesar cache info/clean), aggressive temp file deletion.
+
+5. **Hash collision in cache keys** — Different inputs hash to same cache key, wrong transcription returned. Prevention: use SHA-256 (not MD5), never truncate hashes (use full 64 hex chars), include input type in cache key namespace, validate cache metadata on read.
 
 ## Implications for Roadmap
 
-Based on research, suggested phase structure:
+Based on research, suggested phase structure follows dependency ordering: foundation before operations, basic operations before intermediate artifacts, intermediate artifacts before resume functionality, advanced features build on working cache.
 
-### Phase 1: Package Structure
-**Rationale:** Everything else depends on correct package structure. Import failures are the primary blocker.
-**Delivers:** Installable package via `pip install -e .` with working `cesar` command
-**Addresses:** pyproject.toml, src/ layout, entry points, subcommand structure, version sync
-**Avoids:** Relative import breakage (P1), entry point signature mismatch (P2), test import failures (P10)
+### Phase 1: Cache Foundation
+**Rationale:** Core infrastructure must exist before any caching operations. Atomic writes and content hashing are table stakes that prevent corruption from day one.
 
-**Tasks:**
-1. Create `src/cesar/` directory structure
-2. Move source files with updated imports
-3. Create `__init__.py`, `__main__.py`, `pyproject.toml`
-4. Convert cli.py to Click group with `transcribe` subcommand
-5. Update and verify all tests pass with installed package
-6. Delete old `transcribe.py` entry point
+**Delivers:**
+- CacheManager class with SHA-256 key generation
+- Hybrid storage decision logic (SQLite vs filesystem based on size)
+- Atomic write operations (temp-then-rename pattern)
+- Cache directory structure (~/.cache/cesar/artifacts/)
+- Cache metadata schema in SQLite
 
-### Phase 2: External Dependencies
-**Rationale:** User-facing errors from missing ffprobe and surprise model downloads are the next most impactful issues.
-**Delivers:** Clear error messages, model download prompts, graceful handling of missing external tools
-**Addresses:** First-run experience, ffprobe dependency, model download consent
-**Avoids:** ffprobe missing (P4), model download without consent (P5)
+**Addresses:**
+- Must-have: automatic cache directory creation, cache survives crashes
+- Pitfall 1 (cache corruption): atomic writes prevent partial file corruption
+- Pitfall 5 (hash collisions): SHA-256 with full hashes guarantees uniqueness
 
-**Tasks:**
-1. Add startup check for ffprobe with helpful error message
-2. Implement model cache check before loading
-3. Add download prompt with model size estimate
-4. Show Rich progress bar during model download
-5. Document external dependencies in README
+**Avoids:**
+- Pitfall 1: Implementation includes atomic write-to-temp-then-rename from start
+- Pitfall 5: Use SHA-256, never MD5 or truncated hashes
 
-### Phase 3: Distribution Validation
-**Rationale:** Before publishing, validate the entire user flow works in clean environments.
-**Delivers:** Verified `pipx install git+<url>` workflow, documentation
-**Addresses:** README rendering, license file, Python version constraints
-**Avoids:** README not rendered (P11), license missing (P12), version constraint issues (P13)
+**Research flag:** Standard patterns (well-documented content-addressable storage, skip deep research)
 
-**Tasks:**
-1. Test `pipx install .` in fresh virtual environment
-2. Test `pipx install git+<url>` from GitHub
-3. Validate README renders correctly (twine check)
-4. Add LICENSE file (MIT)
-5. Test on both macOS and Linux
-6. Update documentation with install instructions
+### Phase 2: Orchestrator Integration
+**Rationale:** Cache infrastructure useless without pipeline integration. Transcription caching delivers immediate value (saves 2-5 minutes on cache hit).
 
-### Phase 4: Polish (Optional)
-**Rationale:** Nice-to-have improvements after core packaging works.
-**Delivers:** Shell completion, improved help output, offline mode flag
-**Addresses:** Differentiating features from FEATURES.md
+**Delivers:**
+- TranscriptionOrchestrator accepts optional cache_manager parameter
+- Transcription stage caching (check cache, use if hit, store on success)
+- Diarization stage caching (separate cache key, preserves transcription on failure)
+- keep_intermediate flag integration (already exists in v2.4)
 
-**Tasks:**
-1. Add shell completion generation (`--install-completion`)
-2. Add `--offline` flag that fails if model not cached
-3. Improve help text with model size information
-4. Add `--debug` flag for verbose diagnostics
+**Uses:**
+- CacheManager from Phase 1
+- Existing WhisperXPipeline and AudioTranscriber interfaces
+- Existing fallback patterns (diarization failure preserves cached transcription)
+
+**Implements:**
+- Stage-level cache keys (hash of audio + model_size for transcription, hash of audio + speakers for diarization)
+- Partial failure artifact preservation (cache transcription immediately, attempt diarization, fallback if fails)
+
+**Addresses:**
+- Must-have: skip reprocessing identical inputs
+- Should-have: resume from failure point
+
+**Avoids:**
+- Pitfall 8 (incomplete metadata): include all processing options in cache key
+
+**Research flag:** Standard patterns (pipeline caching well-documented in GitLab CI/CD, Azure Pipelines)
+
+### Phase 3: CLI Cache Controls
+**Rationale:** Users need visibility and control over caching. Without --no-cache flag, users trapped with stale results. Without --cache-info, cache is invisible.
+
+**Delivers:**
+- --no-cache flag (force reprocess, bypass cache)
+- --cache-info flag (show cache location, size, hit/miss stats)
+- Verbose logging of cache hits/misses
+- Cache location documentation in README
+
+**Addresses:**
+- Must-have: --no-cache flag, cache location visibility
+- Should-have: --cache-info flag, verbose logging
+
+**Avoids:**
+- Pitfall 10 (poor observability): users know cache exists and how to manage it
+- Pitfall 11 (no override): --no-cache provides escape hatch
+
+**Research flag:** Standard patterns (Docker --no-cache, npm cache verify, pip cache info)
+
+### Phase 4: URL Freshness and Expiration
+**Rationale:** URL content changes over time. Without expiration, users get stale transcriptions. Time-step function balances freshness with cache efficiency.
+
+**Delivers:**
+- Time-step function for URLs (15-minute buckets by default)
+- Configurable cache TTL (default: 24 hours for URLs, infinite for local files)
+- HTTP conditional requests (ETag/Last-Modified checking)
+- YouTube-specific metadata validation
+
+**Uses:**
+- Cache metadata schema from Phase 1
+- Existing YouTubeHandler for download orchestration
+
+**Addresses:**
+- Must-have: reasonable cache expiration for URLs
+
+**Avoids:**
+- Pitfall 2 (stale URL content): time-step function + HTTP conditional requests
+- Anti-feature: per-second cache freshness causes cache thrashing
+
+**Research flag:** Needs research (HTTP conditional request patterns, YouTube API metadata)
+
+### Phase 5: API Worker Integration
+**Rationale:** Background worker processes most transcription jobs. Cache must work seamlessly in async context without blocking event loop.
+
+**Delivers:**
+- BackgroundWorker passes cache_manager to orchestrator
+- Retry scenarios with cache invalidation (user explicit retry clears cache)
+- Job metadata tracking (transcription_cached, diarization_cached, cache_hit_ratio)
+- asyncio.to_thread() for cache I/O in async context
+
+**Uses:**
+- CacheManager with thread-safe operations
+- Existing JobRepository for metadata persistence
+
+**Implements:**
+- Cache invalidation on explicit retry (clear all stage caches for job)
+- Cache metadata in Job model (optional analytics)
+
+**Addresses:**
+- Should-have: cache stats in health endpoint
+
+**Avoids:**
+- Pitfall 3 (concurrent access): file-based locking for multi-instance safety
+- Anti-pattern: synchronous cache I/O in async context (use asyncio.to_thread)
+
+**Research flag:** Standard patterns (async file I/O well-documented, filelock library examples)
+
+### Phase 6: Concurrent Access and Locking (Optional)
+**Rationale:** Only needed if multiple API instances share cache directory. Defer until needed, start with single-instance deployment.
+
+**Delivers:**
+- File-based locking with filelock library
+- In-memory request coalescing (cache stampede prevention)
+- Lock timeout + fallback to reprocess (no deadlocks)
+- Cleanup of orphaned lock files on startup
+
+**Uses:**
+- filelock 3.20.3 (first new dependency)
+- Cache directory structure with .lock files
+
+**Addresses:**
+- Should-have: concurrent cache safety for multi-instance API
+
+**Avoids:**
+- Pitfall 3 (race conditions): file locking prevents corrupted writes
+- Pitfall 6 (cache stampede): request coalescing prevents duplicate work
+
+**Research flag:** Needs research (filelock patterns, distributed locking strategies)
 
 ### Phase Ordering Rationale
 
-- **Phase 1 must be first** because all other work depends on a working package structure. Attempting any other improvements on the flat file structure will require redoing work.
-- **Phase 2 before Phase 3** because external dependency handling affects the user experience that needs validation in Phase 3.
-- **Phase 3 before Phase 4** because publishing without validation risks a broken first impression. Polish can happen post-launch.
-- **Phase 4 is optional** for MVP - these features can be added in subsequent releases without breaking changes.
+- **Phase 1 → Phase 2:** Cache infrastructure must exist before orchestrator integration
+- **Phase 2 → Phase 3:** Working cache needed before CLI controls are useful
+- **Phase 3 → Phase 4:** Basic caching proven before adding URL complexity
+- **Phase 4 → Phase 5:** URL freshness logic needed before API worker (most API jobs use URLs)
+- **Phase 5 → Phase 6:** Single-instance API proven before multi-instance complexity
+- **Grouping:** Foundation (1), Core Features (2-3), Advanced Features (4-6)
+- **Pitfall avoidance:** Atomic writes in Phase 1 prevents corruption throughout, URL freshness in Phase 4 prevents stale content before heavy API usage
 
 ### Research Flags
 
 Phases likely needing deeper research during planning:
-- **Phase 2:** Model download prompt implementation may need HuggingFace Hub API research for cache detection
+- **Phase 4:** HTTP conditional request patterns, ETag/Last-Modified handling, YouTube API metadata
+- **Phase 6:** Distributed file locking patterns, cache stampede prevention in distributed systems
 
 Phases with standard patterns (skip research-phase):
-- **Phase 1:** Well-documented patterns (PyPA guides, PEP standards, Click docs)
-- **Phase 3:** Standard validation workflow
-- **Phase 4:** Standard Click patterns (shell completion, flags)
+- **Phase 1:** Content-addressable storage well-documented (npm/cacache, Git, BuildStream)
+- **Phase 2:** Pipeline caching patterns established (GitLab CI/CD, Azure Pipelines, Google SRE)
+- **Phase 3:** CLI cache controls universal (Docker, npm, pip)
+- **Phase 5:** Async file I/O patterns well-documented (aiosqlite, asyncio.to_thread)
 
 ## Confidence Assessment
 
 | Area | Confidence | Notes |
 |------|------------|-------|
-| Stack | HIGH | PEP standards, setuptools docs, established since 2021 |
-| Features | HIGH | PyPA guides, widely adopted patterns from popular CLI tools |
-| Architecture | MEDIUM | Standard patterns, but web sources unavailable for verification |
-| Pitfalls | HIGH | Based on project-specific code analysis and established patterns |
+| Stack | HIGH | SQLite performance verified with official benchmarks, hybrid approach proven in npm/cacache |
+| Features | HIGH | Feature expectations verified across Docker, npm, pip, yt-dlp, wget, rsync |
+| Architecture | HIGH | Content-addressable storage patterns established in Git, npm/cacache, BuildStream |
+| Pitfalls | HIGH | All pitfalls verified with real-world evidence from yt-dlp, ffmpeg, pip production issues |
 
 **Overall confidence:** HIGH
 
-The core packaging approach (pyproject.toml, setuptools, src/ layout, entry points) is based on finalized PEP standards and is extremely stable. The main uncertainty is whether faster-whisper has any undocumented compatibility issues with Python 3.14.
+Research findings based on official documentation (SQLite benchmarks, Python stdlib docs), production system behavior (Docker, npm, pip), and verified pitfalls from GitHub issues and technical blogs. The hybrid SQLite + filesystem approach is well-established (npm/cacache uses similar pattern). Content-addressable storage patterns are mature (Git, BuildStream, LLVM).
 
 ### Gaps to Address
 
-- **faster-whisper Python 3.14 compatibility**: Not verified. Mitigate by setting `requires-python = ">=3.10"` and testing on 3.10/3.11/3.12.
-- **HuggingFace Hub API for model cache detection**: May need research during Phase 2 to implement download prompt correctly.
-- **Shell completion installation**: Click's `--install-completion` behavior varies by shell; may need testing during Phase 4.
+Minor areas requiring validation during implementation:
+
+- **HTTP conditional request implementation:** Pattern is well-documented (MDN, Zuplo), but integration with yt-dlp/requests needs testing. Test with real YouTube URLs to ensure ETag/Last-Modified headers are present.
+
+- **Concurrent write performance:** File locking overhead unknown for Cesar's workload. Start without locking (Phase 1-5), measure concurrent request latency in Phase 6 before deciding on locking strategy.
+
+- **Cache size estimation:** Research suggests 10GB default limit, but actual Cesar usage patterns unknown. Monitor real-world cache growth during early adoption, adjust limit based on telemetry.
+
+- **SQLite BLOB size threshold:** Research suggests 100KB cutoff for SQLite vs filesystem. Validate with real Cesar transcription outputs (typical size: 10-50KB JSON) to confirm threshold is optimal.
+
+All gaps have clear resolution paths (testing, monitoring, tuning) and don't block MVP implementation.
 
 ## Sources
 
 ### Primary (HIGH confidence)
-- PEP 517 - Build system interface
-- PEP 518 - pyproject.toml for build requirements
-- PEP 621 - Project metadata in pyproject.toml
-- Python Packaging User Guide (packaging.python.org)
-- Click documentation - Command groups, shell completion
-- setuptools documentation
+- [SQLite: 35% Faster Than The Filesystem](https://sqlite.org/fasterthanfs.html) — Performance benchmarks for BLOB storage
+- [SQLite: Internal Versus External BLOBs](https://sqlite.org/intern-v-extern-blob.html) — Size threshold guidance (100KB)
+- [Python hashlib Documentation](https://docs.python.org/3/library/hashlib.html) — SHA-256 implementation details
+- [Python os.replace Function](https://zetcode.com/python/os-replace/) — Atomic file operations
+- [Docker Build Cache](https://docs.docker.com/build/cache/) — Cache invalidation patterns
+- [pip cache commands](https://pip.pypa.io/en/stable/cli/pip_cache/) — CLI cache management patterns
+- [npm cache verify/clean](https://docs.npmjs.com/cli/v8/commands/npm-cache/) — Cache inspection patterns
 
 ### Secondary (MEDIUM confidence)
-- src/ layout pattern - widely adopted since 2018
-- patterns from popular CLI tools (black, ruff, pytest)
+- [GitHub: npm/cacache](https://github.com/npm/cacache) — Content-addressable storage implementation
+- [Prefect: Idempotent Data Pipelines](https://www.prefect.io/blog/the-importance-of-idempotent-data-pipelines-for-resilience) — Pipeline idempotency patterns
+- [yt-dlp Issue #7669](https://github.com/yt-dlp/yt-dlp/issues/7669) — Partial download failures
+- [Ben Boyter: Cache Eviction](https://boyter.org/posts/media-clipping-using-ffmpeg-with-cache-eviction-2-random-for-disk-caching-at-scale/) — Production ffmpeg caching
+- [Redis: Cache Invalidation](https://redis.io/glossary/cache-invalidation/) — Invalidation strategies
+- [GeeksforGeeks: Cache Invalidation Methods](https://www.geeksforgeeks.org/system-design/cache-invalidation-and-the-methods-to-invalidate-cache/) — Time-based, event-driven, version-based patterns
+- [Medium: File Conflicts in Multithreaded Python](https://medium.com/@aman.deep291098/avoiding-file-conflicts-in-multithreaded-python-programs-34f2888f4521) — File locking patterns
+- [GitLab CI/CD Caching](https://docs.gitlab.com/ci/caching/) — Cache key strategies
+- [Azure Pipelines Caching](https://learn.microsoft.com/en-us/azure/devops/pipelines/release/caching?view=azure-devops) — Multi-stage cache patterns
 
 ### Tertiary (LOW confidence)
-- faster-whisper 3.14 compatibility - needs verification on PyPI
+- [Medium: Cache Stampede](https://medium.com/@sonal.sadafal/cache-stampede-the-thundering-herd-problem-d31d579d93fd) — Thundering herd patterns (needs validation with Cesar workload)
+- [IOriver: Cache Warming](https://www.ioriver.io/terms/cache-warming) — Preloading strategies (likely not needed for Cesar)
 
 ---
-*Research completed: 2026-01-23*
+*Research completed: 2026-02-02*
 *Ready for roadmap: yes*

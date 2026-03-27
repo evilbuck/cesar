@@ -15,6 +15,7 @@ A command-line tool for transcribing audio files to text using OpenAI's Whisper 
 - **Simple Interface**: Single command execution with clear progress feedback
 - **Configurable Threading**: Auto-detect CPU cores or manual thread specification
 - **YouTube Support**: Transcribe YouTube videos directly by URL (requires FFmpeg)
+- **Speaker Identification**: Automatically detect and label different speakers in multi-speaker audio (requires HuggingFace token)
 
 ## Installation
 
@@ -44,7 +45,18 @@ A command-line tool for transcribing audio files to text using OpenAI's Whisper 
    pipx install .
    ```
 
-3. **Verify installation:**
+3. **Configure (optional):**
+   
+   Create a config file at `~/.config/cesar/config.toml` for default settings:
+   ```toml
+   # Optional: HuggingFace token for speaker identification
+   hf_token = "your_hf_token_here"
+   
+   # Optional: Default model size
+   model_size = "base"
+   ```
+
+4. **Verify installation:**
    ```bash
    cesar --version
    cesar --help
@@ -73,6 +85,7 @@ Run `cesar transcribe --help` to see all options:
 - `--compute-type`: Force compute type - auto, float32, float16, int8 (default: auto)
 - `-v, --verbose`: Show detailed system information
 - `-q, --quiet`: Suppress progress display
+- `--diarize/--no-diarize`: Enable/disable speaker identification (default: enabled)
 
 ## Model Sizes
 
@@ -101,7 +114,109 @@ cesar transcribe podcast.mp3 -o podcast.txt --verbose
 
 # Quiet mode (minimal output)
 cesar transcribe recording.wav -o recording.txt --quiet
+
+# Transcribe with speaker identification (default)
+cesar transcribe meeting.mp3 -o meeting.md
+
+# Transcribe without speaker identification
+# (if you don't have HuggingFace token setup)
+cesar transcribe meeting.mp3 -o meeting.txt --no-diarize
 ```
+
+## Speaker Diarization (Multi-Speaker Detection)
+
+Cesar v2.3+ automatically identifies and labels different speakers in your audio files. This is perfect for:
+- Meeting transcripts with multiple participants
+- Interview recordings
+- Podcast episodes with hosts and guests
+- Conference calls
+
+### Setup Requirements
+
+Speaker identification requires a free HuggingFace account and token:
+
+1. **Create a HuggingFace account**: https://hf.co/join
+2. **Get your access token**: https://hf.co/settings/tokens
+3. **Accept the model terms** (required for legal compliance):
+   - https://hf.co/pyannote/speaker-diarization-3.1
+   - https://hf.co/pyannote/segmentation-3.0
+4. **Configure your token** (choose one method):
+   - Set environment variable: `export HF_TOKEN=your_token_here`
+   - Or create config file at `~/.config/cesar/config.toml`:
+     ```toml
+     hf_token = "your_token_here"
+     ```
+
+### Usage
+
+Speaker identification is **enabled by default**. The output will be a Markdown file with speaker labels:
+
+```bash
+# Basic usage (automatically detects speakers)
+cesar transcribe meeting.mp3 -o meeting.md
+
+# Output example:
+# ### Speaker 1
+# [00:23.4 - 00:25.6]
+# Welcome everyone to today's meeting.
+#
+# ### Speaker 2
+# [00:26.0 - 00:28.2]
+# Thanks for having me, let's get started.
+```
+
+### Disabling Speaker Detection
+
+If you don't need speaker labels or don't have a HuggingFace token:
+
+```bash
+# Disable speaker identification (outputs plain text)
+cesar transcribe meeting.mp3 -o meeting.txt --no-diarize
+```
+
+Without speaker detection, the output will be a plain text file without speaker labels.
+
+### Output Format
+
+With speaker identification enabled, transcripts are formatted as Markdown with:
+- **Speaker headers**: `### Speaker 1`, `### Speaker 2`, etc.
+- **Timestamps**: `[MM:SS.d]` format for each segment
+- **Metadata**: Speaker count, duration, and creation date at the top
+
+Example output:
+```markdown
+# Transcript
+
+**Speakers:** 3 detected
+**Duration:** 45:32
+**Created:** 2024-01-15
+
+---
+
+### Speaker 1
+[00:23.4 - 00:25.6]
+Welcome everyone to today's quarterly review.
+
+### Speaker 2
+[00:26.0 - 00:28.2]
+Thanks for having us. I'm excited to share our progress.
+
+### Speaker 1
+[00:28.5 - 00:30.1]
+Let's start with the marketing team's update.
+```
+
+### Troubleshooting Speaker Detection
+
+**Error: "HuggingFace authentication failed"**
+- Ensure your HF_TOKEN is set correctly
+- Verify you've accepted the model terms at both URLs listed above
+- Check that your token has "read" permissions
+
+**Speakers not detected**
+- Verify audio quality (clear speech works best)
+- Some files may fall back to plain transcription if diarization fails
+- Check the output - it will indicate "Speaker detection unavailable" if it falls back
 
 ## YouTube Transcription
 
@@ -277,6 +392,12 @@ Upload an audio file for transcription. Returns immediately with a job ID.
 curl -X POST http://localhost:5000/transcribe \
   -F "file=@recording.mp3" \
   -F "model=base"
+
+# With speaker identification enabled (requires HF_TOKEN env var)
+curl -X POST http://localhost:5000/transcribe \
+  -F "file=@meeting.mp3" \
+  -F "model=base" \
+  -F "diarize=true"
 ```
 
 Response (HTTP 202 Accepted):
@@ -331,8 +452,10 @@ Response (completed job):
   "created_at": "2024-01-15T10:30:00Z",
   "started_at": "2024-01-15T10:30:01Z",
   "completed_at": "2024-01-15T10:31:45Z",
-  "result_text": "This is the transcribed text...",
+  "result_text": "# Transcript\n\n**Speakers:** 2 detected\n...",
   "detected_language": "en",
+  "diarize": true,
+  "speaker_count": 2,
   "error_message": null
 }
 ```
@@ -436,6 +559,11 @@ The tool provides clear error messages for common issues:
 **Slow performance:**
 - Try a smaller model size (tiny, base, small)
 - Ensure Metal GPU acceleration is available on macOS
+
+**Speaker identification not working:**
+- Ensure HF_TOKEN environment variable is set or config file has hf_token
+- Verify you've accepted model terms at https://hf.co/pyannote/speaker-diarization-3.1 and https://hf.co/pyannote/segmentation-3.0
+- Check that your HuggingFace token has "read" permissions
 
 ## Development
 
