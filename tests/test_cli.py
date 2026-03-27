@@ -2,6 +2,7 @@
 """
 Tests for CLI argument parsing and commands
 """
+
 import shutil
 import unittest
 from unittest.mock import patch, MagicMock, Mock
@@ -28,71 +29,76 @@ class TestCLI(unittest.TestCase):
     def tearDown(self):
         """Clean up test files"""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_cli_help(self):
         """Test CLI help command"""
-        result = self.runner.invoke(cli, ['--help'])
+        result = self.runner.invoke(cli, ["--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn('cesar', result.output.lower())
+        self.assertIn("cesar", result.output.lower())
 
     def test_cli_version(self):
         """Test CLI version command"""
-        result = self.runner.invoke(cli, ['--version'])
+        result = self.runner.invoke(cli, ["--version"])
         self.assertEqual(result.exit_code, 0)
         # Should show version number
-        self.assertIn('cesar', result.output.lower())
+        self.assertIn("cesar", result.output.lower())
 
     def test_transcribe_help(self):
         """Test transcribe subcommand help"""
-        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn('INPUT', result.output)
-        self.assertIn('YouTube', result.output)  # Should mention YouTube support
-        self.assertIn('--output', result.output)
-        self.assertIn('--model', result.output)
+        self.assertIn("INPUT", result.output)
+        self.assertIn("YouTube", result.output)  # Should mention YouTube support
+        self.assertIn("--output", result.output)
+        self.assertIn("--model", result.output)
 
     def test_transcribe_missing_input(self):
         """Test transcribe with missing input file"""
-        result = self.runner.invoke(cli, ['transcribe', '-o', 'output.txt'])
+        result = self.runner.invoke(cli, ["transcribe", "-o", "output.txt"])
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn('missing argument', result.output.lower())
+        self.assertIn("missing argument", result.output.lower())
 
     def test_transcribe_missing_output(self):
         """Test transcribe with missing output option"""
-        result = self.runner.invoke(cli, ['transcribe', str(self.test_audio)])
+        result = self.runner.invoke(cli, ["transcribe", str(self.test_audio)])
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn('--output', result.output.lower())
+        self.assertIn("--output", result.output.lower())
 
     def test_transcribe_nonexistent_input(self):
         """Test transcribe with non-existent input file"""
-        result = self.runner.invoke(cli, ['transcribe', 'nonexistent.mp3', '-o', 'output.txt'])
+        result = self.runner.invoke(
+            cli, ["transcribe", "nonexistent.mp3", "-o", "output.txt"]
+        )
         self.assertNotEqual(result.exit_code, 0)
 
     def test_model_choices(self):
         """Test valid model choices are accepted"""
         # Just test that the help shows valid choices
-        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
         self.assertEqual(result.exit_code, 0)
-        for model in ['tiny', 'base', 'small', 'medium', 'large']:
+        for model in ["tiny", "base", "small", "medium", "large"]:
             self.assertIn(model, result.output.lower())
 
     def test_device_choices(self):
         """Test valid device choices are shown"""
-        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
         self.assertEqual(result.exit_code, 0)
-        for device in ['auto', 'cpu', 'cuda', 'mps']:
+        for device in ["auto", "cpu", "cuda", "mps"]:
             self.assertIn(device, result.output.lower())
 
-    @patch('cesar.cli.download_youtube_audio')
-    @patch('cesar.cli.is_youtube_url')
-    @patch('cesar.cli.AudioTranscriber')
-    def test_transcribe_youtube_url(self, mock_transcriber, mock_is_youtube, mock_download):
+    @patch("cesar.cli.download_youtube_audio")
+    @patch("cesar.cli.is_youtube_url")
+    @patch("cesar.cli.AudioTranscriber")
+    def test_transcribe_youtube_url(
+        self, mock_transcriber, mock_is_youtube, mock_download
+    ):
         """Test transcribing a YouTube URL."""
         mock_is_youtube.return_value = True
         # Create a real temp file for the mock to return
-        with tempfile.NamedTemporaryFile(suffix='.m4a', delete=False) as f:
-            f.write(b'fake audio')
+        with tempfile.NamedTemporaryFile(suffix=".m4a", delete=False) as f:
+            f.write(b"fake audio")
             temp_path = Path(f.name)
         mock_download.return_value = temp_path
 
@@ -100,23 +106,27 @@ class TestCLI(unittest.TestCase):
         mock_instance = MagicMock()
         mock_instance.get_audio_duration.return_value = 60.0
         mock_instance.transcribe_file.return_value = {
-            'language': 'en',
-            'language_probability': 0.99,
-            'audio_duration': 60.0,
-            'processing_time': 5.0,
-            'speed_ratio': 12.0,
-            'segment_count': 10,
-            'output_path': str(self.output_file),
+            "language": "en",
+            "language_probability": 0.99,
+            "audio_duration": 60.0,
+            "processing_time": 5.0,
+            "speed_ratio": 12.0,
+            "segment_count": 10,
+            "output_path": str(self.output_file),
         }
         mock_transcriber.return_value = mock_instance
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'transcribe',
-            'https://www.youtube.com/watch?v=test123',
-            '-o', str(self.output_file),
-            '-q',  # Quiet to simplify output checking
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "transcribe",
+                "https://www.youtube.com/watch?v=test123",
+                "-o",
+                str(self.output_file),
+                "-q",  # Quiet to simplify output checking
+            ],
+        )
 
         # Verify download was called
         mock_download.assert_called_once()
@@ -126,51 +136,65 @@ class TestCLI(unittest.TestCase):
         if temp_path.exists():
             temp_path.unlink()
 
-    @patch('cesar.cli.is_youtube_url')
-    @patch('cesar.cli.download_youtube_audio')
+    @patch("cesar.cli.is_youtube_url")
+    @patch("cesar.cli.download_youtube_audio")
     def test_transcribe_youtube_ffmpeg_missing(self, mock_download, mock_is_youtube):
         """Test YouTube URL with FFmpeg missing."""
         from cesar.youtube_handler import FFmpegNotFoundError
+
         mock_is_youtube.return_value = True
         mock_download.side_effect = FFmpegNotFoundError("FFmpeg not found")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'transcribe',
-            'https://www.youtube.com/watch?v=test123',
-            '-o', str(self.output_file),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "transcribe",
+                "https://www.youtube.com/watch?v=test123",
+                "-o",
+                str(self.output_file),
+            ],
+        )
 
         self.assertNotEqual(result.exit_code, 0)
         # Check error appears in output or stderr
-        output_text = result.output + (result.stderr or '')
-        self.assertIn('FFmpeg', output_text)
+        output_text = result.output + (result.stderr or "")
+        self.assertIn("FFmpeg", output_text)
 
-    @patch('cesar.cli.is_youtube_url')
-    @patch('cesar.cli.download_youtube_audio')
+    @patch("cesar.cli.is_youtube_url")
+    @patch("cesar.cli.download_youtube_audio")
     def test_transcribe_youtube_download_error(self, mock_download, mock_is_youtube):
         """Test YouTube URL with download error."""
         from cesar.youtube_handler import YouTubeUnavailableError
+
         mock_is_youtube.return_value = True
         mock_download.side_effect = YouTubeUnavailableError("Video unavailable")
 
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'transcribe',
-            'https://www.youtube.com/watch?v=test123',
-            '-o', str(self.output_file),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "transcribe",
+                "https://www.youtube.com/watch?v=test123",
+                "-o",
+                str(self.output_file),
+            ],
+        )
 
         self.assertNotEqual(result.exit_code, 0)
 
     def test_transcribe_non_youtube_url_rejected(self):
         """Test that non-YouTube URLs are rejected in CLI."""
         runner = CliRunner()
-        result = runner.invoke(cli, [
-            'transcribe',
-            'https://example.com/audio.mp3',
-            '-o', str(self.output_file),
-        ])
+        result = runner.invoke(
+            cli,
+            [
+                "transcribe",
+                "https://example.com/audio.mp3",
+                "-o",
+                str(self.output_file),
+            ],
+        )
 
         # Should fail - CLI only supports files and YouTube URLs
         self.assertNotEqual(result.exit_code, 0)
@@ -188,80 +212,126 @@ class TestYouTubeErrorFormatting(unittest.TestCase):
     def tearDown(self):
         """Clean up test files."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
-    @patch('cesar.cli.download_youtube_audio')
-    @patch('cesar.cli.is_youtube_url', return_value=True)
-    def test_youtube_error_displays_message(self, mock_is_yt, mock_download):
+    @patch("cesar.cli.get_cli_config_path")
+    @patch("cesar.cli.download_youtube_audio")
+    @patch("cesar.cli.is_youtube_url", return_value=True)
+    def test_youtube_error_displays_message(
+        self, mock_is_yt, mock_download, mock_config_path
+    ):
         """Test YouTube errors are displayed with user-friendly format."""
         from cesar.youtube_handler import YouTubeUnavailableError
+
+        mock_config_path.return_value = Path(self.temp_dir) / "config.toml"
         mock_download.side_effect = YouTubeUnavailableError(
             "Private video (video: xyz789). This video is private."
         )
 
         result = self.runner.invoke(
-            transcribe,
-            ['https://youtube.com/watch?v=xyz789', '-o', str(self.output_file)]
+            cli,
+            [
+                "transcribe",
+                "https://youtube.com/watch?v=xyz789",
+                "-o",
+                str(self.output_file),
+            ],
         )
 
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('YouTube Error:', result.output)
-        self.assertIn('Private video', result.output)
+        # Error messages go to stdout via console.print
+        output = result.output + result.stderr
+        self.assertIn("YouTube Error:", output)
+        self.assertIn("Private video", output)
 
-    @patch('cesar.cli.download_youtube_audio')
-    @patch('cesar.cli.is_youtube_url', return_value=True)
-    def test_verbose_shows_cause(self, mock_is_yt, mock_download):
+    @patch("cesar.cli.get_cli_config_path")
+    @patch("cesar.cli.download_youtube_audio")
+    @patch("cesar.cli.is_youtube_url", return_value=True)
+    def test_verbose_shows_cause(self, mock_is_yt, mock_download, mock_config_path):
         """Test verbose mode shows underlying cause."""
         from cesar.youtube_handler import YouTubeNetworkError
+
+        mock_config_path.return_value = Path(self.temp_dir) / "config.toml"
         inner_error = Exception("HTTP Error 500: Internal Server Error")
         outer_error = YouTubeNetworkError("Network error (video: abc123).")
         outer_error.__cause__ = inner_error
         mock_download.side_effect = outer_error
 
         result = self.runner.invoke(
-            transcribe,
-            ['https://youtube.com/watch?v=abc123', '-o', str(self.output_file), '-v']
+            cli,
+            [
+                "transcribe",
+                "https://youtube.com/watch?v=abc123",
+                "-o",
+                str(self.output_file),
+                "-v",
+            ],
         )
 
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('Cause:', result.output)
-        self.assertIn('HTTP Error 500', result.output)
+        output = result.output + result.stderr
+        self.assertIn("Cause:", output)
+        self.assertIn("HTTP Error 500", output)
 
-    @patch('cesar.cli.download_youtube_audio')
-    @patch('cesar.cli.is_youtube_url', return_value=True)
-    def test_verbose_without_cause_no_crash(self, mock_is_yt, mock_download):
+    @patch("cesar.cli.get_cli_config_path")
+    @patch("cesar.cli.download_youtube_audio")
+    @patch("cesar.cli.is_youtube_url", return_value=True)
+    def test_verbose_without_cause_no_crash(
+        self, mock_is_yt, mock_download, mock_config_path
+    ):
         """Test verbose mode handles errors without __cause__."""
         from cesar.youtube_handler import YouTubeRateLimitError
-        mock_download.side_effect = YouTubeRateLimitError("Rate limited (video: abc123).")
+
+        mock_config_path.return_value = Path(self.temp_dir) / "config.toml"
+        mock_download.side_effect = YouTubeRateLimitError(
+            "Rate limited (video: abc123)."
+        )
 
         result = self.runner.invoke(
-            transcribe,
-            ['https://youtube.com/watch?v=abc123', '-o', str(self.output_file), '-v']
+            cli,
+            [
+                "transcribe",
+                "https://youtube.com/watch?v=abc123",
+                "-o",
+                str(self.output_file),
+                "-v",
+            ],
         )
 
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('YouTube Error:', result.output)
+        output = result.output + result.stderr
+        self.assertIn("YouTube Error:", output)
         # Should not crash, and should not show "Cause:" line
-        self.assertNotIn('Cause:', result.output)
+        self.assertNotIn("Cause:", output)
 
-    @patch('cesar.cli.download_youtube_audio')
-    @patch('cesar.cli.is_youtube_url', return_value=True)
-    def test_non_verbose_hides_cause(self, mock_is_yt, mock_download):
+    @patch("cesar.cli.get_cli_config_path")
+    @patch("cesar.cli.download_youtube_audio")
+    @patch("cesar.cli.is_youtube_url", return_value=True)
+    def test_non_verbose_hides_cause(self, mock_is_yt, mock_download, mock_config_path):
         """Test non-verbose mode does not show underlying cause."""
         from cesar.youtube_handler import YouTubeNetworkError
+
+        mock_config_path.return_value = Path(self.temp_dir) / "config.toml"
         inner_error = Exception("HTTP Error 500: Internal Server Error")
         outer_error = YouTubeNetworkError("Network error (video: abc123).")
         outer_error.__cause__ = inner_error
         mock_download.side_effect = outer_error
 
         result = self.runner.invoke(
-            transcribe,
-            ['https://youtube.com/watch?v=abc123', '-o', str(self.output_file)]
+            cli,
+            [
+                "transcribe",
+                "https://youtube.com/watch?v=abc123",
+                "-o",
+                str(self.output_file),
+            ],
         )
 
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('YouTube Error:', result.output)
-        self.assertNotIn('Cause:', result.output)
+        output = result.output + result.stderr
+        self.assertIn("YouTube Error:", output)
+        self.assertNotIn("Cause:", output)
 
 
 class TestDiarizationCLI(unittest.TestCase):
@@ -276,51 +346,52 @@ class TestDiarizationCLI(unittest.TestCase):
     def tearDown(self):
         """Clean up test files."""
         import shutil
+
         shutil.rmtree(self.temp_dir)
 
     def test_diarize_flag_default_true(self):
         """Test that --diarize flag defaults to True in help text."""
-        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn('--diarize', result.output)
-        self.assertIn('--no-diarize', result.output)
+        self.assertIn("--diarize", result.output)
+        self.assertIn("--no-diarize", result.output)
         # Default should be shown as diarize (True)
-        self.assertIn('default: diarize', result.output.lower())
+        self.assertIn("default: diarize", result.output.lower())
 
     def test_no_diarize_flag_accepted(self):
         """Test that --no-diarize flag is recognized."""
         # Just verify the flag is accepted in argument parsing
         # (actual transcription test requires audio file)
-        result = self.runner.invoke(cli, ['transcribe', '--no-diarize', '--help'])
+        result = self.runner.invoke(cli, ["transcribe", "--no-diarize", "--help"])
         self.assertEqual(result.exit_code, 0)
 
     def test_output_extension_validation_md_for_diarize(self):
         """Test that output gets .md extension when diarize=True."""
         from cesar.cli import validate_output_extension
 
-        output = Path('/tmp/transcript.txt')
+        output = Path("/tmp/transcript.txt")
         corrected = validate_output_extension(output, diarize=True, quiet=True)
-        self.assertEqual(corrected.suffix, '.md')
+        self.assertEqual(corrected.suffix, ".md")
 
     def test_output_extension_validation_txt_for_no_diarize(self):
         """Test that output gets .txt extension when diarize=False."""
         from cesar.cli import validate_output_extension
 
-        output = Path('/tmp/transcript.md')
+        output = Path("/tmp/transcript.md")
         corrected = validate_output_extension(output, diarize=False, quiet=True)
-        self.assertEqual(corrected.suffix, '.txt')
+        self.assertEqual(corrected.suffix, ".txt")
 
     def test_output_extension_no_change_when_correct(self):
         """Test that correct extensions are not changed."""
         from cesar.cli import validate_output_extension
 
         # .md with diarize=True should stay .md
-        output = Path('/tmp/transcript.md')
+        output = Path("/tmp/transcript.md")
         corrected = validate_output_extension(output, diarize=True, quiet=True)
         self.assertEqual(corrected, output)
 
         # .txt with diarize=False should stay .txt
-        output = Path('/tmp/transcript.txt')
+        output = Path("/tmp/transcript.txt")
         corrected = validate_output_extension(output, diarize=False, quiet=True)
         self.assertEqual(corrected, output)
 
@@ -332,25 +403,35 @@ class TestCLIConfigLoading(unittest.TestCase):
         """Set up test environment with isolated config."""
         self.runner = CliRunner()
         self.temp_dir = tempfile.mkdtemp()
+        # Reset console quiet mode (may be set by other tests)
+        from cesar.cli import console
+
+        console.quiet = False
+        console.file = None  # Reset to default stdout
 
     def tearDown(self):
         """Clean up test files."""
         import shutil
-        shutil.rmtree(self.temp_dir)
 
-    @patch('cesar.cli.get_cli_config_path')
+        shutil.rmtree(self.temp_dir)
+        # Reset console state for other tests
+        from cesar.cli import console
+
+        console.quiet = False
+        console.file = None
+
+    @patch("cesar.cli.get_cli_config_path")
     def test_cli_runs_without_config(self, mock_get_path):
         """Test CLI runs when no config file exists."""
         # Point to non-existent config
         config_path = Path(self.temp_dir) / "config.toml"
         mock_get_path.return_value = config_path
 
-        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
         self.assertEqual(result.exit_code, 0)
-        self.assertIn('not found', result.output)
-        self.assertIn('using defaults', result.output)
+        # Config "not found" message is suppressed during --help to keep discovery clean
 
-    @patch('cesar.cli.get_cli_config_path')
+    @patch("cesar.cli.get_cli_config_path")
     def test_cli_fails_on_invalid_config(self, mock_get_path):
         """Test CLI exits with error on invalid config."""
         # Create invalid config file
@@ -358,23 +439,25 @@ class TestCLIConfigLoading(unittest.TestCase):
         config_path.write_text('diarize = "invalid"')
         mock_get_path.return_value = config_path
 
-        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
         self.assertEqual(result.exit_code, 1)
-        self.assertIn('Configuration Error', result.output)
-        self.assertIn('diarize', result.output)
+        # Error messages go to stderr
+        output = result.output + result.stderr
+        self.assertIn("Configuration Error", output)
+        self.assertIn("diarize", output)
 
-    @patch('cesar.cli.get_cli_config_path')
+    @patch("cesar.cli.get_cli_config_path")
     def test_cli_loads_valid_config(self, mock_get_path):
         """Test CLI successfully loads valid config."""
         # Create valid config file
         config_path = Path(self.temp_dir) / "config.toml"
-        config_path.write_text('diarize = true\nmin_speakers = 2')
+        config_path.write_text("diarize = true\nmin_speakers = 2")
         mock_get_path.return_value = config_path
 
-        result = self.runner.invoke(cli, ['transcribe', '--help'])
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
         self.assertEqual(result.exit_code, 0)
         # Should not show "not found" message when config exists
-        self.assertNotIn('not found', result.output)
+        self.assertNotIn("not found", result.output)
 
 
 class TestDiarizationE2E(unittest.TestCase):
@@ -388,15 +471,19 @@ class TestDiarizationE2E(unittest.TestCase):
     def setUp(self):
         """Set up test environment."""
         self.runner = CliRunner()
-        self.real_audio_path = Path("/home/buckleyrobinson/projects/cesar/assets/testing speech audio file.m4a")
+        self.real_audio_path = Path(
+            "/home/buckleyrobinson/projects/cesar/assets/testing speech audio file.m4a"
+        )
         # Reset console quiet mode (may be set by other tests)
         from cesar.cli import console
+
         console.quiet = False
 
     def tearDown(self):
         """Clean up test environment."""
         # Ensure console quiet mode is reset for other tests
         from cesar.cli import console
+
         console.quiet = False
 
     def _create_mock_whisperx(self):
@@ -423,19 +510,32 @@ class TestDiarizationE2E(unittest.TestCase):
             "language": "en",
             "segments": [
                 {"start": 0.0, "end": 5.5, "text": "Hello and welcome to the test."},
-                {"start": 5.5, "end": 11.1, "text": "Thank you for listening."}
-            ]
+                {"start": 5.5, "end": 11.1, "text": "Thank you for listening."},
+            ],
         }
         mock_whisperx.load_model.return_value = mock_model
 
         # Mock alignment
         mock_align_model = Mock()
         mock_align_metadata = Mock()
-        mock_whisperx.load_align_model.return_value = (mock_align_model, mock_align_metadata)
+        mock_whisperx.load_align_model.return_value = (
+            mock_align_model,
+            mock_align_metadata,
+        )
         mock_whisperx.align.return_value = {
             "segments": [
-                {"start": 0.0, "end": 5.5, "text": "Hello and welcome to the test.", "speaker": "SPEAKER_00"},
-                {"start": 5.5, "end": 11.1, "text": "Thank you for listening.", "speaker": "SPEAKER_01"}
+                {
+                    "start": 0.0,
+                    "end": 5.5,
+                    "text": "Hello and welcome to the test.",
+                    "speaker": "SPEAKER_00",
+                },
+                {
+                    "start": 5.5,
+                    "end": 11.1,
+                    "text": "Thank you for listening.",
+                    "speaker": "SPEAKER_01",
+                },
             ]
         }
 
@@ -448,8 +548,18 @@ class TestDiarizationE2E(unittest.TestCase):
         # Mock speaker assignment
         mock_whisperx.assign_word_speakers.return_value = {
             "segments": [
-                {"start": 0.0, "end": 5.5, "text": "Hello and welcome to the test.", "speaker": "SPEAKER_00"},
-                {"start": 5.5, "end": 11.1, "text": "Thank you for listening.", "speaker": "SPEAKER_01"}
+                {
+                    "start": 0.0,
+                    "end": 5.5,
+                    "text": "Hello and welcome to the test.",
+                    "speaker": "SPEAKER_00",
+                },
+                {
+                    "start": 5.5,
+                    "end": 11.1,
+                    "text": "Thank you for listening.",
+                    "speaker": "SPEAKER_01",
+                },
             ]
         }
 
@@ -475,7 +585,7 @@ class TestDiarizationE2E(unittest.TestCase):
                 transcription_time=1.5,
                 diarization_time=0.8,
                 formatting_time=0.1,
-                diarization_succeeded=True
+                diarization_succeeded=True,
             )
 
             # Create Markdown output with speaker labels and timestamps
@@ -490,20 +600,26 @@ Thank you for listening.
             output_path.write_text(markdown_content)
 
             # Mock at orchestrator level to avoid whisperx import issues
-            with patch('cesar.cli.TranscriptionOrchestrator') as mock_orch_cls, \
-                 patch('cesar.cli.WhisperXPipeline'):
+            with (
+                patch("cesar.cli.TranscriptionOrchestrator") as mock_orch_cls,
+                patch("cesar.cli.WhisperXPipeline"),
+            ):
                 mock_orch = MagicMock()
                 mock_orch.orchestrate.return_value = mock_result
                 mock_orch_cls.return_value = mock_orch
 
                 # Invoke CLI with diarization enabled
-                result = self.runner.invoke(cli, [
-                    'transcribe',
-                    str(audio_path),
-                    '-o', str(output_path),
-                    '--diarize',
-                    '--quiet'
-                ])
+                result = self.runner.invoke(
+                    cli,
+                    [
+                        "transcribe",
+                        str(audio_path),
+                        "-o",
+                        str(output_path),
+                        "--diarize",
+                        "--quiet",
+                    ],
+                )
 
                 # Assert exit code is success
                 self.assertEqual(result.exit_code, 0, f"CLI failed: {result.output}")
@@ -515,10 +631,12 @@ Thank you for listening.
                 content = output_path.read_text()
 
                 # Assert file contains speaker headers (### Speaker format)
-                self.assertIn('### Speaker', content, "Missing speaker headers in output")
+                self.assertIn(
+                    "### Speaker", content, "Missing speaker headers in output"
+                )
 
                 # Assert file contains timestamps ([00: format)
-                self.assertIn('[00:', content, "Missing timestamps in output")
+                self.assertIn("[00:", content, "Missing timestamps in output")
 
     def test_cli_diarize_without_quiet_shows_progress(self):
         """Test that CLI without --quiet flag shows progress indicators."""
@@ -540,33 +658,39 @@ Thank you for listening.
                 transcription_time=1.5,
                 diarization_time=0.8,
                 formatting_time=0.1,
-                diarization_succeeded=True
+                diarization_succeeded=True,
             )
 
             # Create the output file (orchestrator would create this)
             output_path.write_text("### Speaker 1\n[00:00.0]\nHello.\n")
 
             # Mock at orchestrator level for non-quiet mode test
-            with patch('cesar.cli.TranscriptionOrchestrator') as mock_orch_cls, \
-                 patch('cesar.cli.WhisperXPipeline'):
+            with (
+                patch("cesar.cli.TranscriptionOrchestrator") as mock_orch_cls,
+                patch("cesar.cli.WhisperXPipeline"),
+            ):
                 mock_orch = MagicMock()
                 mock_orch.orchestrate.return_value = mock_result
                 mock_orch_cls.return_value = mock_orch
 
                 # Invoke without --quiet flag
-                result = self.runner.invoke(cli, [
-                    'transcribe',
-                    str(audio_path),
-                    '-o', str(output_path),
-                    '--diarize'
-                ])
+                result = self.runner.invoke(
+                    cli,
+                    [
+                        "transcribe",
+                        str(audio_path),
+                        "-o",
+                        str(output_path),
+                        "--diarize",
+                    ],
+                )
 
                 # Verify exit code is success
                 self.assertEqual(result.exit_code, 0, f"CLI failed: {result.output}")
 
                 # Verify output contains progress/status indicators
                 # (transcription phase messages, completion message, etc.)
-                self.assertIn('Transcription completed', result.output)
+                self.assertIn("Transcription completed", result.output)
 
     def test_cli_diarize_fallback_on_auth_error(self):
         """Test CLI completes with fallback when diarization fails with auth error."""
@@ -589,27 +713,35 @@ Thank you for listening.
                 transcription_time=1.5,
                 diarization_time=None,  # Diarization didn't complete
                 formatting_time=0.1,
-                diarization_succeeded=False  # Fallback indicator
+                diarization_succeeded=False,  # Fallback indicator
             )
 
             # Create plain text output (fallback result)
-            output_path.write_text("Hello and welcome to the test.\nThank you for listening.\n")
+            output_path.write_text(
+                "Hello and welcome to the test.\nThank you for listening.\n"
+            )
 
             # Mock orchestrator to return fallback result
-            with patch('cesar.cli.TranscriptionOrchestrator') as mock_orch_cls, \
-                 patch('cesar.cli.WhisperXPipeline'):
+            with (
+                patch("cesar.cli.TranscriptionOrchestrator") as mock_orch_cls,
+                patch("cesar.cli.WhisperXPipeline"),
+            ):
                 mock_orch = MagicMock()
                 mock_orch.orchestrate.return_value = mock_result
                 mock_orch_cls.return_value = mock_orch
 
                 # Invoke CLI with diarization enabled (will fallback)
-                result = self.runner.invoke(cli, [
-                    'transcribe',
-                    str(audio_path),
-                    '-o', str(output_path),
-                    '--diarize',
-                    '--quiet'
-                ])
+                result = self.runner.invoke(
+                    cli,
+                    [
+                        "transcribe",
+                        str(audio_path),
+                        "-o",
+                        str(output_path),
+                        "--diarize",
+                        "--quiet",
+                    ],
+                )
 
                 # Verify CLI completes with exit_code 0 (fallback succeeded)
                 self.assertEqual(result.exit_code, 0, f"CLI failed: {result.output}")
@@ -632,39 +764,45 @@ Thank you for listening.
             output_path.write_text(plain_content)
 
             # Mock AudioTranscriber for non-diarization path
-            with patch('cesar.cli.AudioTranscriber') as mock_transcriber_cls:
+            with patch("cesar.cli.AudioTranscriber") as mock_transcriber_cls:
                 mock_transcriber = MagicMock()
                 mock_transcriber.get_audio_duration.return_value = 11.1
                 mock_transcriber.validate_output_path.return_value = None
                 mock_transcriber.transcribe_file.return_value = {
-                    'language': 'en',
-                    'language_probability': 0.99,
-                    'audio_duration': 11.1,
-                    'processing_time': 1.5,
-                    'speed_ratio': 7.4,
-                    'segment_count': 2,
-                    'output_path': str(output_path)
+                    "language": "en",
+                    "language_probability": 0.99,
+                    "audio_duration": 11.1,
+                    "processing_time": 1.5,
+                    "speed_ratio": 7.4,
+                    "segment_count": 2,
+                    "output_path": str(output_path),
                 }
                 mock_transcriber_cls.return_value = mock_transcriber
 
                 # Invoke with --no-diarize flag
-                result = self.runner.invoke(cli, [
-                    'transcribe',
-                    str(audio_path),
-                    '-o', str(output_path),
-                    '--no-diarize',
-                    '--quiet'
-                ])
+                result = self.runner.invoke(
+                    cli,
+                    [
+                        "transcribe",
+                        str(audio_path),
+                        "-o",
+                        str(output_path),
+                        "--no-diarize",
+                        "--quiet",
+                    ],
+                )
 
                 # Verify exit code is success
                 self.assertEqual(result.exit_code, 0, f"CLI failed: {result.output}")
 
                 # Verify output file has .txt extension
-                self.assertEqual(output_path.suffix, '.txt')
+                self.assertEqual(output_path.suffix, ".txt")
 
                 # Verify file content does NOT contain speaker headers
                 content = output_path.read_text()
-                self.assertNotIn('### Speaker', content, "Plain text should not have speaker headers")
+                self.assertNotIn(
+                    "### Speaker", content, "Plain text should not have speaker headers"
+                )
 
     def test_cli_diarize_with_model_size_option(self):
         """Test CLI --diarize with --model option passes model size correctly."""
@@ -686,28 +824,35 @@ Thank you for listening.
                 transcription_time=2.0,  # Slightly longer for small model
                 diarization_time=0.8,
                 formatting_time=0.1,
-                diarization_succeeded=True
+                diarization_succeeded=True,
             )
 
             # Create output file
             output_path.write_text("### Speaker 1\n[00:00.0]\nHello.\n")
 
             # Mock at orchestrator level and track WhisperXPipeline instantiation
-            with patch('cesar.cli.TranscriptionOrchestrator') as mock_orch_cls, \
-                 patch('cesar.cli.WhisperXPipeline') as mock_pipeline_cls:
+            with (
+                patch("cesar.cli.TranscriptionOrchestrator") as mock_orch_cls,
+                patch("cesar.cli.WhisperXPipeline") as mock_pipeline_cls,
+            ):
                 mock_orch = MagicMock()
                 mock_orch.orchestrate.return_value = mock_result
                 mock_orch_cls.return_value = mock_orch
 
                 # Invoke with --model small option
-                result = self.runner.invoke(cli, [
-                    'transcribe',
-                    str(audio_path),
-                    '-o', str(output_path),
-                    '--diarize',
-                    '--model', 'small',
-                    '--quiet'
-                ])
+                result = self.runner.invoke(
+                    cli,
+                    [
+                        "transcribe",
+                        str(audio_path),
+                        "-o",
+                        str(output_path),
+                        "--diarize",
+                        "--model",
+                        "small",
+                        "--quiet",
+                    ],
+                )
 
                 # Verify exit code is success
                 self.assertEqual(result.exit_code, 0, f"CLI failed: {result.output}")
@@ -715,7 +860,7 @@ Thank you for listening.
                 # Verify WhisperXPipeline was called with model_name='small'
                 mock_pipeline_cls.assert_called_once()
                 call_kwargs = mock_pipeline_cls.call_args[1]
-                self.assertEqual(call_kwargs['model_name'], 'small')
+                self.assertEqual(call_kwargs["model_name"], "small")
 
 
 if __name__ == "__main__":

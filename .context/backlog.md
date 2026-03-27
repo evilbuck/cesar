@@ -27,7 +27,9 @@
 ## High Priority
 
 ## Medium Priority
-- [ ] [Fix CLI Test Failures](#fix-cli-test-failures)
+
+## Completed
+- [x] Fix CLI Test Failures (2026-03-27)
 
 ## Low Priority / Nice to Have
 

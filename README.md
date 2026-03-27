@@ -565,6 +565,19 @@ The tool provides clear error messages for common issues:
 - Verify you've accepted model terms at https://hf.co/pyannote/speaker-diarization-3.1 and https://hf.co/pyannote/segmentation-3.0
 - Check that your HuggingFace token has "read" permissions
 
+## Automation & Agents
+
+Cesar can be automated via CLI or HTTP API. For programmatic usage:
+
+| Use Case | Recommended Approach |
+|----------|---------------------|
+| Single file transcription | `cesar transcribe <file> -o <output>` |
+| YouTube transcription | `cesar transcribe "<url>" -o <output>` |
+| Multiple files | Script with separate `cesar transcribe` calls per file |
+| HTTP API integration | `cesar serve` + POST to `/transcribe` endpoint |
+
+For detailed agent usage guidelines, see [AGENTS.md](AGENTS.md).
+
 ## Development
 
 ### Running Tests

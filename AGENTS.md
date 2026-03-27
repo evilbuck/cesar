@@ -317,3 +317,61 @@ except ProcessingError as e:
 - Follow the established error handling patterns
 - Update documentation when adding new features
 - Use the existing logging patterns throughout the codebase
+
+## Using Cesar from Agents
+
+Cesar is an offline audio transcription tool. This section provides guidance for agents on how to invoke Cesar effectively.
+
+### Command Selection Guide
+
+| Task | Command |
+|------|---------|
+| Transcribe a local audio file | `cesar transcribe <file> -o <output>` |
+| Transcribe a YouTube video | `cesar transcribe "<youtube_url>" -o <output>` |
+| Transcribe without speaker labels | `cesar transcribe <file> -o <output> --no-diarize` |
+| Start API server for programmatic access | `cesar serve` |
+
+### When to Use `transcribe` vs `serve`
+
+**Use `cesar transcribe` (one-shot CLI) when:**
+- Transcribing a single audio file or YouTube video
+- Running in a script or pipeline with file-based I/O
+- Batch processing with separate invocations per file
+
+**Use `cesar serve` (API server) when:**
+- Building an integration that submits jobs via HTTP
+- Processing multiple transcription requests through a job queue
+- Need async job tracking with persistent state across requests
+
+### Quick Reference
+
+```bash
+# Transcribe local file (speaker labels enabled by default)
+cesar transcribe meeting.mp3 -o meeting.md
+
+# Transcribe without speaker identification
+cesar transcribe meeting.mp3 -o meeting.txt --no-diarize
+
+# Transcribe YouTube video
+cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt
+
+# Start API server on default port
+cesar serve
+
+# Start API server on custom port
+cesar serve --port 8080
+```
+
+### Configuration
+
+Optional config file: `~/.config/cesar/config.toml`
+```toml
+hf_token = "your_hf_token_here"  # For speaker identification
+model_size = "base"               # Default model size
+```
+
+### Troubleshooting
+
+- **"Config not found" during --help**: This is informational only and can be ignored
+- **FFmpeg not found**: Install FFmpeg (required for YouTube transcription)
+- **HuggingFace auth failed**: Set HF_TOKEN environment variable or add hf_token to config

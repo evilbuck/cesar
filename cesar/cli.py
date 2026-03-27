@@ -1,6 +1,7 @@
 """
 Click-based command line interface for audio transcription
 """
+
 import logging
 import sys
 import time
@@ -18,7 +19,7 @@ from rich.progress import (
     BarColumn,
     TaskProgressColumn,
     TimeElapsedColumn,
-    TimeRemainingColumn
+    TimeRemainingColumn,
 )
 
 from cesar.config import (
@@ -47,6 +48,7 @@ from cesar.youtube_handler import (
 
 try:
     from importlib.metadata import version
+
     __version__ = version("cesar")
 except Exception:
     __version__ = "0.0.0"
@@ -95,7 +97,7 @@ class ProgressTracker:
                 TaskProgressColumn(),
                 TimeElapsedColumn(),
                 TimeRemainingColumn(),
-                console=console
+                console=console,
             )
             self.progress.__enter__()
             self.task_id = self.progress.add_task("Transcribing audio...", total=100)
@@ -105,7 +107,9 @@ class ProgressTracker:
         if self.progress:
             self.progress.__exit__(exc_type, exc_val, exc_tb)
 
-    def update(self, progress_percentage: float, segment_count: int, elapsed_time: float):
+    def update(
+        self, progress_percentage: float, segment_count: int, elapsed_time: float
+    ):
         """Update progress display (legacy callback for direct transcription)."""
         if self.progress and self.task_id is not None:
             # Update only every 0.5 seconds to avoid too frequent updates
@@ -114,7 +118,7 @@ class ProgressTracker:
                 self.progress.update(
                     self.task_id,
                     completed=progress_percentage,
-                    description=f"Transcribing audio... ({segment_count} segments)"
+                    description=f"Transcribing audio... ({segment_count} segments)",
                 )
                 self.last_update = current_time
 
@@ -129,9 +133,7 @@ class ProgressTracker:
             current_time = time.time()
             if current_time - self.last_update >= 0.5:
                 self.progress.update(
-                    self.task_id,
-                    completed=percentage,
-                    description=step_name
+                    self.task_id, completed=percentage, description=step_name
                 )
                 self.last_update = current_time
 
@@ -142,12 +144,15 @@ def get_hf_token(config: CesarConfig) -> Optional[str]:
     Priority: config file > HF_TOKEN env var > None (cached)
     """
     import os
+
     if config.hf_token:
         return config.hf_token
-    return os.environ.get('HF_TOKEN')
+    return os.environ.get("HF_TOKEN")
 
 
-def validate_output_extension(output_path: Path, diarize: bool, quiet: bool = False) -> Path:
+def validate_output_extension(
+    output_path: Path, diarize: bool, quiet: bool = False
+) -> Path:
     """Validate and correct output file extension based on diarization mode.
 
     Args:
@@ -158,18 +163,18 @@ def validate_output_extension(output_path: Path, diarize: bool, quiet: bool = Fa
     Returns:
         Corrected output path with appropriate extension (.md or .txt)
     """
-    expected_ext = '.md' if diarize else '.txt'
+    expected_ext = ".md" if diarize else ".txt"
     current_ext = output_path.suffix.lower()
 
     if current_ext != expected_ext:
         corrected_path = output_path.with_suffix(expected_ext)
         if not quiet:
-            if diarize and current_ext == '.txt':
+            if diarize and current_ext == ".txt":
                 console.print(
                     f"[yellow]Note: Changed output to {expected_ext} "
                     f"for speaker-labeled transcript[/yellow]"
                 )
-            elif not diarize and current_ext == '.md':
+            elif not diarize and current_ext == ".md":
                 console.print(
                     f"[yellow]Note: Changed output to {expected_ext} "
                     f"for plain transcript[/yellow]"
@@ -205,11 +210,17 @@ def show_diarization_summary(result: OrchestrationResult, verbose: bool, quiet: 
         console.print("[yellow]  (Speaker detection unavailable)[/yellow]")
 
     # Timing breakdown
-    console.print(f"  Transcription: [blue]{format_time(result.transcription_time)}[/blue]")
+    console.print(
+        f"  Transcription: [blue]{format_time(result.transcription_time)}[/blue]"
+    )
     if result.diarization_time is not None:
-        console.print(f"  Diarization: [blue]{format_time(result.diarization_time)}[/blue]")
+        console.print(
+            f"  Diarization: [blue]{format_time(result.diarization_time)}[/blue]"
+        )
     console.print(f"  Total: [blue]{format_time(result.total_processing_time)}[/blue]")
-    console.print(f"  Speed ratio: [yellow]{result.speed_ratio:.1f}x[/yellow] faster than real-time")
+    console.print(
+        f"  Speed ratio: [yellow]{result.speed_ratio:.1f}x[/yellow] faster than real-time"
+    )
 
     console.print(f"  Output saved to: [green]{result.output_path}[/green]")
 
@@ -227,95 +238,114 @@ def cli(ctx):
     try:
         config = load_config(config_path)
         ctx.ensure_object(dict)
-        ctx.obj['config'] = config
+        ctx.obj["config"] = config
     except ConfigError as e:
         console.print(f"[red]Configuration Error:[/red] {e}")
         sys.exit(1)
 
     # Show informational message if config file doesn't exist (not blocking)
+    # Suppress during --help or --version to keep discovery output clean
     if not config_path.exists():
-        # Check if we're in quiet mode by looking ahead at arguments
-        quiet_mode = '-q' in sys.argv or '--quiet' in sys.argv
-        if not quiet_mode:
-            console.print(f"[dim]Config: {config_path} not found (using defaults)[/dim]")
+        help_mode = "--help" in sys.argv or "-h" in sys.argv
+        quiet_mode = "-q" in sys.argv or "--quiet" in sys.argv
+        if not quiet_mode and not help_mode:
+            console.print(
+                f"[dim]Config: {config_path} not found (using defaults)[/dim]"
+            )
 
 
 @cli.command(name="transcribe")
-@click.argument(
-    'input_source',
-    type=click.STRING,
-    metavar='INPUT'
-)
+@click.argument("input_source", type=click.STRING, metavar="INPUT")
 @click.option(
-    '-o', '--output',
+    "-o",
+    "--output",
     required=True,
     type=click.Path(path_type=Path),
-    help='Path for the output text file'
+    help="Path for the output text file",
 )
 @click.option(
-    '--model',
-    type=click.Choice(['tiny', 'base', 'small', 'medium', 'large'], case_sensitive=False),
-    default='base',
+    "--model",
+    type=click.Choice(
+        ["tiny", "base", "small", "medium", "large"], case_sensitive=False
+    ),
+    default="base",
     show_default=True,
-    help='Whisper model size to use'
+    help="Whisper model size to use",
 )
 @click.option(
-    '--device',
-    type=click.Choice(['auto', 'cpu', 'cuda', 'mps'], case_sensitive=False),
-    default='auto',
+    "--device",
+    type=click.Choice(["auto", "cpu", "cuda", "mps"], case_sensitive=False),
+    default="auto",
     show_default=True,
-    help='Force specific device for inference'
+    help="Force specific device for inference",
 )
 @click.option(
-    '--compute-type',
-    type=click.Choice(['auto', 'float32', 'float16', 'int8', 'int8_float16'], case_sensitive=False),
-    default='auto',
+    "--compute-type",
+    type=click.Choice(
+        ["auto", "float32", "float16", "int8", "int8_float16"], case_sensitive=False
+    ),
+    default="auto",
     show_default=True,
-    help='Force specific compute type'
+    help="Force specific compute type",
 )
 @click.option(
-    '--batch-size',
+    "--batch-size",
     type=click.IntRange(min=1, max=64),
-    help='Batch size for processing (auto-detected if not specified)'
+    help="Batch size for processing (auto-detected if not specified)",
 )
 @click.option(
-    '--num-workers',
+    "--num-workers",
     type=click.IntRange(min=1, max=32),
-    help='Number of worker threads (auto-detected if not specified)'
+    help="Number of worker threads (auto-detected if not specified)",
 )
 @click.option(
-    '--verbose', '-v',
+    "--verbose",
+    "-v",
     is_flag=True,
-    help='Show detailed system information and optimization hints'
+    help="Show detailed system information and optimization hints",
 )
 @click.option(
-    '--quiet', '-q',
+    "--quiet",
+    "-q",
     is_flag=True,
-    help='Suppress progress display and non-essential output'
+    help="Suppress progress display and non-essential output",
 )
 @click.option(
-    '--max-duration',
+    "--max-duration",
     type=click.IntRange(min=1),
-    help='Limit transcription to N minutes (from start or --start-time)'
+    help="Limit transcription to N minutes (from start or --start-time)",
 )
 @click.option(
-    '--start-time',
+    "--start-time",
     type=click.FloatRange(min=0),
-    help='Start transcription at N seconds'
+    help="Start transcription at N seconds",
 )
 @click.option(
-    '--end-time',
-    type=click.FloatRange(min=0),
-    help='End transcription at N seconds'
+    "--end-time", type=click.FloatRange(min=0), help="End transcription at N seconds"
 )
 @click.option(
-    '--diarize/--no-diarize',
+    "--diarize/--no-diarize",
     default=True,
     show_default=True,
-    help='Enable speaker identification (disable with --no-diarize)'
+    help="Enable speaker identification (disable with --no-diarize)",
 )
 @click.pass_context
-def transcribe(ctx, input_source, output, model, device, compute_type, batch_size, num_workers, verbose, quiet, max_duration, start_time, end_time, diarize):
+def transcribe(
+    ctx,
+    input_source,
+    output,
+    model,
+    device,
+    compute_type,
+    batch_size,
+    num_workers,
+    verbose,
+    quiet,
+    max_duration,
+    start_time,
+    end_time,
+    diarize,
+):
     """
     Transcribe audio files or YouTube videos to text using faster-whisper (offline)
 
@@ -323,9 +353,22 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
 
     Supported audio formats: MP3, WAV, M4A, OGG, FLAC, AAC, WMA
     Supported URLs: YouTube videos (requires FFmpeg)
+
+    Examples:
+        # Transcribe a local audio file (output: transcript.txt)
+        cesar transcribe audio.mp3 -o transcript.txt
+
+        # Transcribe without speaker identification (plain text output)
+        cesar transcribe audio.mp3 -o transcript.txt --no-diarize
+
+        # Transcribe a YouTube video
+        cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt
+
+        # Use a specific model for higher accuracy
+        cesar transcribe audio.mp3 -o transcript.txt --model large
     """
-    # Get config from context (config.diarize will be used in Phase 12)
-    config = ctx.obj.get('config', CesarConfig())
+    # Get config from context
+    config = ctx.obj.get("config", CesarConfig())
 
     # Validate time parameter combinations first, before any operations
     if max_duration and end_time is not None:
@@ -354,7 +397,7 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
             console.quiet = True
 
         # Handle YouTube URLs vs file paths
-        if input_source.startswith('http://') or input_source.startswith('https://'):
+        if input_source.startswith("http://") or input_source.startswith("https://"):
             # It's a URL
             if is_youtube_url(input_source):
                 if not quiet:
@@ -380,10 +423,10 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
         # Create transcriber instance
         transcriber = AudioTranscriber(
             model_size=model.lower(),
-            device=device.lower() if device != 'auto' else None,
-            compute_type=compute_type.lower() if compute_type != 'auto' else None,
+            device=device.lower() if device != "auto" else None,
+            compute_type=compute_type.lower() if compute_type != "auto" else None,
             batch_size=batch_size,
-            num_workers=num_workers
+            num_workers=num_workers,
         )
 
         # Download YouTube audio if needed
@@ -407,7 +450,9 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
             if not quiet:
                 console.print(f"[blue]Audio duration:[/blue] {format_time(duration)}")
         except Exception as e:
-            console.print(f"[yellow]Warning: Could not determine audio duration: {e}[/yellow]")
+            console.print(
+                f"[yellow]Warning: Could not determine audio duration: {e}[/yellow]"
+            )
             duration = 0
 
         # Show model information if verbose
@@ -421,19 +466,23 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
             console.print(f"  Worker threads: [cyan]{model_info['num_workers']}[/cyan]")
 
             # Show device capabilities
-            caps = model_info['capabilities']
+            caps = model_info["capabilities"]
             console.print("\n[bold]Device Capabilities:[/bold]")
             console.print(f"  CUDA available: [cyan]{caps['has_cuda']}[/cyan]")
-            if caps['cuda_version']:
+            if caps["cuda_version"]:
                 console.print(f"  CUDA version: [cyan]{caps['cuda_version']}[/cyan]")
-            if caps['gpu_memory_mb']:
+            if caps["gpu_memory_mb"]:
                 console.print(f"  GPU memory: [cyan]{caps['gpu_memory_mb']} MB[/cyan]")
             console.print(f"  Apple MPS available: [cyan]{caps['has_mps']}[/cyan]")
             console.print(f"  CPU cores: [cyan]{caps['cpu_cores']}[/cyan]")
 
             if duration > 0:
-                estimated_time = estimate_processing_time(duration, model_info['model_size'])
-                console.print(f"\n  Estimated processing time: [yellow]{format_time(estimated_time)}[/yellow]")
+                estimated_time = estimate_processing_time(
+                    duration, model_info["model_size"]
+                )
+                console.print(
+                    f"\n  Estimated processing time: [yellow]{format_time(estimated_time)}[/yellow]"
+                )
             console.print()
 
         # Validate output extension based on diarization mode
@@ -450,10 +499,7 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
             hf_token = get_hf_token(config)
             # WhisperXPipeline handles token resolution internally (env, cache)
             # Create pipeline with model size passed through
-            pipeline = WhisperXPipeline(
-                model_name=model,
-                hf_token=hf_token
-            )
+            pipeline = WhisperXPipeline(model_name=model, hf_token=hf_token)
 
         # Set up progress tracking
         progress_tracker = ProgressTracker(show_progress=not quiet)
@@ -469,7 +515,7 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
                 # Use orchestrator for diarized transcription
                 orchestrator = TranscriptionOrchestrator(
                     pipeline=pipeline,
-                    transcriber=transcriber  # Kept for fallback when diarization fails
+                    transcriber=transcriber,  # Kept for fallback when diarization fails
                 )
 
                 # Pass min/max_speakers from config to orchestrate()
@@ -479,7 +525,11 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
                     enable_diarization=True,
                     min_speakers=config.min_speakers,
                     max_speakers=config.max_speakers,
-                    progress_callback=lambda step, pct: progress_tracker.update_step(step, pct) if not quiet else None
+                    progress_callback=lambda step, pct: progress_tracker.update_step(
+                        step, pct
+                    )
+                    if not quiet
+                    else None,
                 )
 
                 # Show results with diarization info
@@ -492,18 +542,32 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
                     progress_callback=progress_tracker.update if not quiet else None,
                     max_duration_minutes=max_duration,
                     start_time_seconds=start_time,
-                    end_time_seconds=end_time
+                    end_time_seconds=end_time,
                 )
 
                 # Show results (existing logic)
                 if not quiet:
-                    console.print(f"\n[bold green]Transcription completed![/bold green]")
-                    console.print(f"  Language: [cyan]{result['language']}[/cyan] (probability: {result['language_probability']:.2f})")
-                    console.print(f"  Audio duration: [blue]{format_time(result['audio_duration'])}[/blue]")
-                    console.print(f"  Processing time: [blue]{format_time(result['processing_time'])}[/blue]")
-                    console.print(f"  Speed ratio: [yellow]{result['speed_ratio']:.1f}x[/yellow] faster than real-time")
-                    console.print(f"  Total segments: [cyan]{result['segment_count']}[/cyan]")
-                    console.print(f"  Output saved to: [green]{result['output_path']}[/green]")
+                    console.print(
+                        f"\n[bold green]Transcription completed![/bold green]"
+                    )
+                    console.print(
+                        f"  Language: [cyan]{result['language']}[/cyan] (probability: {result['language_probability']:.2f})"
+                    )
+                    console.print(
+                        f"  Audio duration: [blue]{format_time(result['audio_duration'])}[/blue]"
+                    )
+                    console.print(
+                        f"  Processing time: [blue]{format_time(result['processing_time'])}[/blue]"
+                    )
+                    console.print(
+                        f"  Speed ratio: [yellow]{result['speed_ratio']:.1f}x[/yellow] faster than real-time"
+                    )
+                    console.print(
+                        f"  Total segments: [cyan]{result['segment_count']}[/cyan]"
+                    )
+                    console.print(
+                        f"  Output saved to: [green]{result['output_path']}[/green]"
+                    )
                 else:
                     console.print(f"Transcription completed: {result['output_path']}")
 
@@ -521,7 +585,7 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
 
         # Show cleaned underlying cause in verbose mode
         if verbose and e.__cause__:
-            cause = str(e.__cause__).split('\n')[0]  # First line only
+            cause = str(e.__cause__).split("\n")[0]  # First line only
             console.print(f"[dim]  Cause: {cause}[/dim]")
             click.echo(f"  Cause: {cause}", err=True)
 
@@ -544,9 +608,13 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
     except ImportError as e:
         error_msg = f"Error: {e}"
         console.print(f"[red]{error_msg}[/red]")
-        console.print("[yellow]Hint: Install faster-whisper with: pip install faster-whisper[/yellow]")
+        console.print(
+            "[yellow]Hint: Install faster-whisper with: pip install faster-whisper[/yellow]"
+        )
         click.echo(error_msg, err=True)
-        click.echo("Hint: Install faster-whisper with: pip install faster-whisper", err=True)
+        click.echo(
+            "Hint: Install faster-whisper with: pip install faster-whisper", err=True
+        )
         return 1
     except RuntimeError as e:
         error_msg = f"Error: {e}"
@@ -576,6 +644,7 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
         click.echo(error_msg, err=True)
         if verbose:
             import traceback
+
             trace = traceback.format_exc()
             console.print(f"[dim]{trace}[/dim]")
             click.echo(trace, err=True)
@@ -591,12 +660,41 @@ def transcribe(ctx, input_source, output, model, device, compute_type, batch_siz
 
 
 @cli.command(name="serve")
-@click.option('--port', '-p', type=int, default=5000, show_default=True, help='Port to bind to')
-@click.option('--host', '-h', default='127.0.0.1', show_default=True, help='Host to bind to')
-@click.option('--reload', is_flag=True, help='Enable auto-reload for development')
-@click.option('--workers', type=int, default=1, show_default=True, help='Number of uvicorn workers')
+@click.option(
+    "--port", "-p", type=int, default=5000, show_default=True, help="Port to bind to"
+)
+@click.option(
+    "--host", "-h", default="127.0.0.1", show_default=True, help="Host to bind to"
+)
+@click.option("--reload", is_flag=True, help="Enable auto-reload for development")
+@click.option(
+    "--workers",
+    type=int,
+    default=1,
+    show_default=True,
+    help="Number of uvicorn workers",
+)
 def serve(port, host, reload, workers):
-    """Start the Cesar HTTP API server."""
+    """Start the Cesar HTTP API server for programmatic transcription.
+
+    Use this command to run a persistent HTTP API server for transcription jobs.
+    The server accepts file uploads and YouTube URLs, and processes them asynchronously.
+
+    Unlike the 'transcribe' command (one-shot CLI), 'serve' is for:
+    - Long-running API server for integrations
+    - Submitting jobs via HTTP POST endpoints
+    - Processing multiple transcription requests
+
+    Examples:
+        # Start API server on default port (5000)
+        cesar serve
+
+        # Start on custom port with auto-reload for development
+        cesar serve --port 8080 --reload
+
+        # Start with multiple workers for production
+        cesar serve --workers 4
+    """
     # Print startup message (minimal per CONTEXT.md)
     console.print(f"Listening on http://{host}:{port}")
 
