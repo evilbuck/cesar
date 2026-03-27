@@ -36,10 +36,10 @@ A command-line tool for transcribing audio files to text using OpenAI's Whisper 
 2. **Install cesar:**
    ```bash
    # From git repository
-   pipx install git+https://github.com/yourusername/cesar.git
+   pipx install git+https://github.com/evilbuck/cesar.git
 
    # Or from local clone
-   git clone https://github.com/yourusername/cesar.git
+   git clone https://github.com/evilbuck/cesar.git
    cd cesar
    pipx install .
    ```
@@ -448,7 +448,7 @@ python -m pytest tests/ -v
 ### Installing for Development
 
 ```bash
-git clone https://github.com/yourusername/cesar.git
+git clone https://github.com/evilbuck/cesar.git
 cd cesar
 pip install -e .
 ```
