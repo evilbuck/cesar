@@ -330,6 +330,7 @@ Cesar is an offline audio transcription tool. This section provides guidance for
 | Transcribe a YouTube video | `cesar transcribe "<youtube_url>" -o <output>` |
 | Transcribe without speaker labels | `cesar transcribe <file> -o <output> --no-diarize` |
 | Start API server for programmatic access | `cesar serve` |
+| Install agent skill into a project | `cesar skill install` |
 
 ### When to Use `transcribe` vs `serve`
 

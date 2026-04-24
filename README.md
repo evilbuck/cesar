@@ -575,8 +575,33 @@ Cesar can be automated via CLI or HTTP API. For programmatic usage:
 | YouTube transcription | `cesar transcribe "<url>" -o <output>` |
 | Multiple files | Script with separate `cesar transcribe` calls per file |
 | HTTP API integration | `cesar serve` + POST to `/transcribe` endpoint |
+| CLI capability discovery | `cesar commands --json` |
+| Install agent skill | `cesar skill install` |
+
+For machine-readable CLI discovery, use:
+
+```bash
+cesar commands --json
+```
 
 For detailed agent usage guidelines, see [AGENTS.md](AGENTS.md).
+
+### Agent Skill
+
+Cesar includes an [Agent Skill](https://agentskills.io) that teaches AI coding assistants how to use Cesar for audio transcription. The skill is bundled with the package and deploys to a project's `.agents/skills/` directory.
+
+```bash
+# Install the skill into the current project
+cesar skill install
+
+# Install into a specific project
+cesar skill install --path ~/projects/my-project
+
+# Overwrite an existing installation
+ cesar skill install --force
+```
+
+After installation, AI agents in that project will automatically discover the `cesar-transcribe` skill and can transcribe audio files on request. The skill covers CLI usage, YouTube URLs, output formats, common options, and gotchas like FFmpeg and HuggingFace token requirements.
 
 ## Development
 
