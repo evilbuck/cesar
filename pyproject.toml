@@ -35,3 +35,6 @@ cesar = "cesar.cli:cli"
 [tool.setuptools.packages.find]
 where = ["."]
 include = ["cesar*"]
+
+[tool.setuptools.package-data]
+cesar = ["skills/**/*"]

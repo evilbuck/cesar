@@ -3,6 +3,7 @@
 Tests for CLI argument parsing and commands
 """
 
+import json
 import shutil
 import unittest
 from unittest.mock import patch, MagicMock, Mock
@@ -38,6 +39,15 @@ class TestCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("cesar", result.output.lower())
 
+    def test_cli_short_help_alias(self):
+        """Test top-level -h alias works."""
+        result = self.runner.invoke(cli, ["-h"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Common workflows", result.output)
+        self.assertIn("transcribe", result.output)
+        self.assertIn("serve", result.output)
+        self.assertIn("commands", result.output)
+
     def test_cli_version(self):
         """Test CLI version command"""
         result = self.runner.invoke(cli, ["--version"])
@@ -53,6 +63,14 @@ class TestCLI(unittest.TestCase):
         self.assertIn("YouTube", result.output)  # Should mention YouTube support
         self.assertIn("--output", result.output)
         self.assertIn("--model", result.output)
+
+    def test_transcribe_short_help_alias(self):
+        """Test transcribe -h alias works."""
+        result = self.runner.invoke(cli, ["transcribe", "-h"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Automation tips", result.output)
+        self.assertIn("--quiet", result.output)
+        self.assertIn("--no-diarize", result.output)
 
     def test_transcribe_missing_input(self):
         """Test transcribe with missing input file"""
@@ -198,6 +216,71 @@ class TestCLI(unittest.TestCase):
 
         # Should fail - CLI only supports files and YouTube URLs
         self.assertNotEqual(result.exit_code, 0)
+
+
+class TestCommandsDiscovery(unittest.TestCase):
+    """Tests for machine-readable CLI discovery."""
+
+    def setUp(self):
+        """Set up test environment."""
+        self.runner = CliRunner()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        """Clean up test files."""
+        shutil.rmtree(self.temp_dir)
+
+    def test_commands_text_output(self):
+        """Test human-readable commands output."""
+        result = self.runner.invoke(cli, ["commands"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("Cesar CLI discovery", result.output)
+        self.assertIn("cesar commands --json", result.output)
+        self.assertIn("transcribe", result.output)
+
+    @patch("cesar.cli.get_cli_config_path")
+    def test_commands_json_output(self, mock_get_path):
+        """Test JSON discovery output is machine-readable and clean."""
+        mock_get_path.return_value = Path(self.temp_dir) / "config.toml"
+
+        result = self.runner.invoke(cli, ["commands", "--json"])
+        self.assertEqual(result.exit_code, 0)
+
+        # Strip any config status lines that leak from the group callback
+        output = "\n".join(
+            line for line in result.output.splitlines()
+            if not line.startswith("Config:")
+        )
+        self.assertNotIn("not found", output.lower())
+
+        payload = json.loads(output)
+        self.assertEqual(payload["schema_version"], "1")
+        self.assertEqual(payload["name"], "cesar")
+        self.assertIn("commands", [cmd["name"] for cmd in payload["commands"]])
+        self.assertIn("transcribe", [cmd["name"] for cmd in payload["commands"]])
+        self.assertIn("serve", [cmd["name"] for cmd in payload["commands"]])
+
+        transcribe_cmd = next(
+            cmd for cmd in payload["commands"] if cmd["name"] == "transcribe"
+        )
+        self.assertIn("one-shot transcription", transcribe_cmd["best_for"])
+        self.assertTrue(any(opt["name"] == "quiet" for opt in transcribe_cmd["options"]))
+
+
+class TestServeHelp(unittest.TestCase):
+    """Tests for serve command help output."""
+
+    def setUp(self):
+        """Set up test environment."""
+        self.runner = CliRunner()
+
+    def test_serve_short_help_alias(self):
+        """Test serve -h shows help instead of consuming host option."""
+        result = self.runner.invoke(cli, ["serve", "-h"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("/docs", result.output)
+        self.assertIn("--host", result.output)
+        self.assertIn("-H", result.output)
 
 
 class TestYouTubeErrorFormatting(unittest.TestCase):
@@ -861,6 +944,81 @@ Thank you for listening.
                 mock_pipeline_cls.assert_called_once()
                 call_kwargs = mock_pipeline_cls.call_args[1]
                 self.assertEqual(call_kwargs["model_name"], "small")
+
+
+class TestSkillInstall(unittest.TestCase):
+    """Test the skill install command"""
+
+    def setUp(self):
+        self.runner = CliRunner()
+        self.temp_dir = tempfile.mkdtemp()
+
+    def tearDown(self):
+        shutil.rmtree(self.temp_dir)
+
+    def test_skill_help(self):
+        """Test skill command shows help"""
+        result = self.runner.invoke(cli, ["skill", "--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("install", result.output)
+
+    def test_skill_install_creates_directory(self):
+        """Test skill install creates .agents/skills/cesar-transcribe/"""
+        result = self.runner.invoke(
+            cli, ["skill", "install", "--path", self.temp_dir]
+        )
+        self.assertEqual(result.exit_code, 0, f"Failed: {result.output}")
+
+        skill_file = (
+            Path(self.temp_dir) / ".agents" / "skills" / "cesar-transcribe" / "SKILL.md"
+        )
+        self.assertTrue(skill_file.exists(), "SKILL.md not created")
+
+        content = skill_file.read_text()
+        self.assertIn("cesar-transcribe", content)
+        self.assertIn("---", content)  # Has frontmatter
+
+    def test_skill_install_duplicate_blocked(self):
+        """Test skill install refuses to overwrite without --force"""
+        # First install
+        result = self.runner.invoke(
+            cli, ["skill", "install", "--path", self.temp_dir]
+        )
+        self.assertEqual(result.exit_code, 0)
+
+        # Second install without --force should fail
+        result = self.runner.invoke(
+            cli, ["skill", "install", "--path", self.temp_dir]
+        )
+        self.assertNotEqual(result.exit_code, 0)
+        self.assertIn("--force", result.output)
+
+    def test_skill_install_force_overwrites(self):
+        """Test skill install --force overwrites existing skill"""
+        # First install
+        self.runner.invoke(cli, ["skill", "install", "--path", self.temp_dir])
+
+        # Force re-install should succeed
+        result = self.runner.invoke(
+            cli, ["skill", "install", "--path", self.temp_dir, "--force"]
+        )
+        self.assertEqual(result.exit_code, 0, f"Failed: {result.output}")
+
+    @patch("cesar.cli.get_cli_config_path")
+    def test_skill_appears_in_commands_json(self, mock_get_path):
+        """Test skill command appears in discovery manifest"""
+        mock_get_path.return_value = Path(self.temp_dir) / "config.toml"
+
+        result = self.runner.invoke(cli, ["commands", "--json"])
+        self.assertEqual(result.exit_code, 0)
+        # Strip any config status lines that leak from the group callback
+        output = "\n".join(
+            line for line in result.output.splitlines()
+            if not line.startswith("Config:")
+        )
+        manifest = json.loads(output)
+        names = [c["name"] for c in manifest["commands"]]
+        self.assertIn("skill", names)
 
 
 if __name__ == "__main__":

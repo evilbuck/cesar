@@ -13,8 +13,20 @@ from functools import lru_cache
 from pathlib import Path
 from typing import Optional
 
-import yt_dlp
-from yt_dlp.utils import DownloadError, ExtractorError, PostProcessingError
+try:
+    import yt_dlp
+    from yt_dlp.utils import DownloadError, ExtractorError, PostProcessingError
+except ImportError:  # pragma: no cover - exercised in minimal/help-only environments
+    yt_dlp = None
+
+    class DownloadError(Exception):
+        """Fallback yt-dlp DownloadError when yt-dlp is not installed."""
+
+    class ExtractorError(Exception):
+        """Fallback yt-dlp ExtractorError when yt-dlp is not installed."""
+
+    class PostProcessingError(Exception):
+        """Fallback yt-dlp PostProcessingError when yt-dlp is not installed."""
 
 logger = logging.getLogger(__name__)
 
@@ -174,6 +186,11 @@ def download_youtube_audio(url: str, output_dir: Optional[Path] = None) -> Path:
         YouTubeRateLimitError: If rate limited
         YouTubeDownloadError: For other download errors
     """
+    if yt_dlp is None:
+        raise YouTubeDownloadError(
+            "yt-dlp is not installed. Install it with: pip install yt-dlp"
+        )
+
     require_ffmpeg()
 
     video_id = extract_video_id(url)

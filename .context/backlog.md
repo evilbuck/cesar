@@ -34,5 +34,7 @@
 ## Low Priority / Nice to Have
 
 ## Completed
+- [x] Add machine-readable CLI discovery via `cesar commands --json` (2026-04-24)
+- [x] Improve CLI help and `-h` support for agents (2026-04-24)
 - [x] Implement Cache Foundation (2026-03-27)
 - [x] Research v2.4 Cache Foundation (2026-03-27)

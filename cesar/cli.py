@@ -2,7 +2,10 @@
 Click-based command line interface for audio transcription
 """
 
+import inspect
+import json
 import logging
+import shutil
 import sys
 import time
 from contextlib import contextmanager
@@ -10,7 +13,6 @@ from pathlib import Path
 from typing import Optional
 
 import click
-import uvicorn
 from rich.console import Console
 from rich.progress import (
     Progress,
@@ -59,6 +61,59 @@ console = Console()
 
 # Set up logger
 logger = logging.getLogger(__name__)
+
+CLI_CONTEXT_SETTINGS = {
+    "help_option_names": ["-h", "--help"],
+    "max_content_width": 100,
+}
+
+CLI_WORKFLOWS = [
+    "cesar transcribe meeting.mp3 -o meeting.md",
+    "cesar transcribe note.m4a -o note.txt --no-diarize --quiet",
+    'cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt',
+    "cesar serve --host 0.0.0.0 --port 5000",
+    "cesar commands --json",
+]
+
+CLI_AGENT_TIPS = [
+    "--quiet reduces progress UI noise",
+    "--no-diarize produces plain text output",
+    "serve is better for async or multi-job integrations",
+    "commands --json emits a machine-readable CLI manifest",
+]
+
+COMMAND_METADATA = {
+    "commands": {
+        "best_for": ["agent discovery", "automation bootstrap", "capability inspection"],
+        "examples": [
+            "cesar commands",
+            "cesar commands --json",
+        ],
+    },
+    "transcribe": {
+        "best_for": ["one-shot transcription", "batch scripting", "YouTube-to-text"],
+        "examples": [
+            "cesar transcribe audio.mp3 -o transcript.md",
+            "cesar transcribe audio.mp3 -o transcript.txt --no-diarize --quiet",
+            'cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt',
+        ],
+    },
+    "serve": {
+        "best_for": ["HTTP integrations", "async job submission", "multi-client workflows"],
+        "examples": [
+            "cesar serve",
+            "cesar serve --port 8080 --reload",
+            "cesar serve --host 0.0.0.0 --workers 4",
+        ],
+    },
+    "skill": {
+        "best_for": ["agent skill deployment", "IDE integration setup"],
+        "examples": [
+            "cesar skill install",
+            "cesar skill install --path ~/projects/my-app",
+        ],
+    },
+}
 
 
 @contextmanager
@@ -184,6 +239,80 @@ def validate_output_extension(
     return output_path
 
 
+def _clean_help_text(text: Optional[str]) -> str:
+    """Normalize Click doc/help text for display and JSON output."""
+    if not text:
+        return ""
+
+    return inspect.cleandoc(text).replace("``", "").replace("\b", "")
+
+
+def _serialize_param(param: click.Parameter) -> dict:
+    """Serialize a Click parameter into JSON-safe metadata."""
+    param_type = getattr(param.type, "name", param.type.__class__.__name__.lower())
+    param_name = param.name
+    if isinstance(param, click.Option):
+        long_flag = next((opt for opt in param.opts if opt.startswith("--")), None)
+        if long_flag is not None:
+            param_name = long_flag.lstrip("-").replace("-", "_")
+
+    data = {
+        "name": param_name,
+        "kind": "option" if isinstance(param, click.Option) else "argument",
+        "required": param.required,
+        "type": param_type,
+    }
+
+    if isinstance(param.type, click.Choice):
+        data["choices"] = list(param.type.choices)
+
+    if isinstance(param, click.Option):
+        data["flags"] = [*param.opts, *param.secondary_opts]
+        data["help"] = (param.help or "").strip()
+        data["is_flag"] = param.is_flag
+        if param.default is not None and param.default != ():
+            data["default"] = param.default
+        if param.multiple:
+            data["multiple"] = True
+        if param.nargs != 1:
+            data["nargs"] = param.nargs
+    else:
+        data["metavar"] = param.metavar or param.human_readable_name.upper()
+        if param.nargs != 1:
+            data["nargs"] = param.nargs
+
+    return data
+
+
+def build_cli_manifest() -> dict:
+    """Build a machine-readable manifest of the CLI surface."""
+    commands = []
+    for command_name, command in cli.commands.items():
+        metadata = COMMAND_METADATA.get(command_name, {})
+        params = [_serialize_param(param) for param in command.params]
+        commands.append(
+            {
+                "name": command_name,
+                "summary": (command.short_help or "").strip(),
+                "description": _clean_help_text(command.help),
+                "best_for": metadata.get("best_for", []),
+                "examples": metadata.get("examples", []),
+                "arguments": [param for param in params if param["kind"] == "argument"],
+                "options": [param for param in params if param["kind"] == "option"],
+            }
+        )
+
+    return {
+        "schema_version": "1",
+        "name": "cesar",
+        "version": __version__,
+        "summary": "Offline audio transcription for local files and YouTube URLs.",
+        "workflows": CLI_WORKFLOWS,
+        "automation_tips": CLI_AGENT_TIPS,
+        "commands": commands,
+    }
+
+
 def show_diarization_summary(result: OrchestrationResult, verbose: bool, quiet: bool):
     """Display transcription summary with diarization details.
 
@@ -225,11 +354,29 @@ def show_diarization_summary(result: OrchestrationResult, verbose: bool, quiet: 
     console.print(f"  Output saved to: [green]{result.output_path}[/green]")
 
 
-@click.group()
+@click.group(context_settings=CLI_CONTEXT_SETTINGS, no_args_is_help=True)
 @click.version_option(version=__version__, prog_name="cesar")
 @click.pass_context
 def cli(ctx):
-    """Cesar: Offline audio transcription using faster-whisper"""
+    """Offline audio transcription for local files and YouTube URLs.
+
+    Use ``transcribe`` for one-shot CLI runs and ``serve`` for the HTTP API.
+
+    \b
+    Common workflows:
+      cesar transcribe meeting.mp3 -o meeting.md
+      cesar transcribe note.m4a -o note.txt --no-diarize --quiet
+      cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt
+      cesar serve --host 0.0.0.0 --port 5000
+      cesar commands --json
+
+    \b
+    Agent / automation tips:
+      - ``--quiet`` reduces progress UI noise
+      - ``--no-diarize`` produces plain text output
+      - ``serve`` is better for async or multi-job integrations
+      - ``commands --json`` emits a machine-readable CLI manifest
+    """
     # Clean up orphaned temp files from previous sessions on startup
     cleanup_youtube_temp_dir()
 
@@ -248,13 +395,122 @@ def cli(ctx):
     if not config_path.exists():
         help_mode = "--help" in sys.argv or "-h" in sys.argv
         quiet_mode = "-q" in sys.argv or "--quiet" in sys.argv
-        if not quiet_mode and not help_mode:
+        discovery_mode = "commands" in sys.argv[1:]
+        if not quiet_mode and not help_mode and not discovery_mode:
             console.print(
                 f"[dim]Config: {config_path} not found (using defaults)[/dim]"
             )
 
 
-@cli.command(name="transcribe")
+@cli.command(
+    name="commands",
+    short_help="Describe CLI commands in text or JSON.",
+    context_settings=CLI_CONTEXT_SETTINGS,
+)
+@click.option("--json", "as_json", is_flag=True, help="Emit machine-readable JSON discovery data")
+def commands(as_json):
+    """Describe Cesar's CLI surface for humans or automation.
+
+    Use ``--json`` to emit a machine-readable manifest with commands, arguments,
+    options, examples, and recommended usage.
+
+    \b
+    Examples:
+      cesar commands
+      cesar commands --json
+    """
+    manifest = build_cli_manifest()
+
+    if as_json:
+        click.echo(json.dumps(manifest, indent=2))
+        return 0
+
+    click.echo(f"Cesar CLI discovery (v{manifest['version']})")
+    click.echo("Use 'cesar commands --json' for machine-readable output.\n")
+    for command in manifest["commands"]:
+        click.echo(f"- {command['name']}: {command['summary']}")
+        if command["best_for"]:
+            click.echo(f"  best for: {', '.join(command['best_for'])}")
+        if command["examples"]:
+            click.echo(f"  example: {command['examples'][0]}")
+    return 0
+
+
+@cli.command(
+    name="skill",
+    short_help="Manage agent skills for IDE integration.",
+    context_settings=CLI_CONTEXT_SETTINGS,
+)
+@click.argument("action", type=click.Choice(["install"]))
+@click.option(
+    "--path", "target_path",
+    type=click.Path(path_type=Path),
+    default=".",
+    show_default="current directory",
+    help="Project directory to install the skill into",
+)
+@click.option(
+    "--force",
+    is_flag=True,
+    help="Overwrite existing skill if it already exists",
+)
+def skill(action, target_path, force):
+    """Deploy the Cesar agent skill to a project directory.
+
+    Installs the ``cesar-transcribe`` skill into ``<path>/.agents/skills/`` so that
+    AI agents in that project can discover and use Cesar for audio transcription.
+
+    \b
+    Examples:
+      cesar skill install                 # Install into current directory
+      cesar skill install --path ~/proj   # Install into a specific project
+      cesar skill install --force         # Overwrite existing skill
+    """
+    if action == "install":
+        _install_skill(target_path, force)
+
+
+def _install_skill(target_path: Path, force: bool = False) -> None:
+    """Copy bundled skill files into the target project's .agents/skills/ directory."""
+    # Locate bundled skill directory relative to this package
+    package_dir = Path(__file__).parent
+    source_skill = package_dir / "skills" / "cesar-transcribe"
+
+    if not source_skill.is_dir():
+        raise click.ClickException(
+            "Agent skill not found in package. "
+            "Reinstall cesar to get the bundled skill."
+        )
+
+    skill_dest = target_path.resolve() / ".agents" / "skills" / "cesar-transcribe"
+
+    if skill_dest.exists() and not force:
+        raise click.ClickException(
+            f"Skill already exists at {skill_dest}. Use --force to overwrite."
+        )
+
+    # Create destination and copy files
+    skill_dest.mkdir(parents=True, exist_ok=True)
+    for item in source_skill.iterdir():
+        dest_file = skill_dest / item.name
+        if item.is_file():
+            shutil.copy2(item, dest_file)
+        elif item.is_dir():
+            if dest_file.exists():
+                shutil.rmtree(dest_file)
+            shutil.copytree(item, dest_file)
+
+    console.print(f"[green]✓[/green] Installed cesar-transcribe skill to {skill_dest}")
+    console.print(
+        "[dim]Agents in this project can now transcribe audio using Cesar.[/dim]"
+    )
+
+
+@cli.command(
+    name="transcribe",
+    short_help="Transcribe a local audio file or YouTube URL.",
+    context_settings=CLI_CONTEXT_SETTINGS,
+)
 @click.argument("input_source", type=click.STRING, metavar="INPUT")
 @click.option(
     "-o",
@@ -346,26 +602,33 @@ def transcribe(
     end_time,
     diarize,
 ):
-    """
-    Transcribe audio files or YouTube videos to text using faster-whisper (offline)
+    """Transcribe a local audio file or YouTube URL.
 
-    INPUT: Path to audio file or YouTube URL
+    INPUT may be a filesystem path or a YouTube URL.
 
-    Supported audio formats: MP3, WAV, M4A, OGG, FLAC, AAC, WMA
-    Supported URLs: YouTube videos (requires FFmpeg)
+    \b
+    Accepted input:
+      - local audio file: mp3, wav, m4a, ogg, flac, aac, wma
+      - YouTube URL (requires FFmpeg)
 
+    \b
+    Output behavior:
+      - diarized transcripts default to Markdown (.md)
+      - --no-diarize outputs plain text (.txt)
+      - output extensions are auto-corrected when needed
+
+    \b
+    Automation tips:
+      - use --quiet for cleaner machine-readable logs
+      - use --no-diarize when plain text is easier to consume
+      - use --start-time / --end-time to transcribe a clip
+
+    \b
     Examples:
-        # Transcribe a local audio file (output: transcript.txt)
-        cesar transcribe audio.mp3 -o transcript.txt
-
-        # Transcribe without speaker identification (plain text output)
-        cesar transcribe audio.mp3 -o transcript.txt --no-diarize
-
-        # Transcribe a YouTube video
-        cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt
-
-        # Use a specific model for higher accuracy
-        cesar transcribe audio.mp3 -o transcript.txt --model large
+      cesar transcribe audio.mp3 -o transcript.md
+      cesar transcribe audio.mp3 -o transcript.txt --no-diarize --quiet
+      cesar transcribe interview.wav -o interview.md --model large
+      cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt
     """
     # Get config from context
     config = ctx.obj.get("config", CesarConfig())
@@ -659,12 +922,16 @@ def transcribe(
                 pass  # Best effort cleanup
 
 
-@cli.command(name="serve")
+@cli.command(
+    name="serve",
+    short_help="Run the HTTP API server for async transcription jobs.",
+    context_settings=CLI_CONTEXT_SETTINGS,
+)
 @click.option(
     "--port", "-p", type=int, default=5000, show_default=True, help="Port to bind to"
 )
 @click.option(
-    "--host", "-h", default="127.0.0.1", show_default=True, help="Host to bind to"
+    "--host", "-H", default="127.0.0.1", show_default=True, help="Host to bind to"
 )
 @click.option("--reload", is_flag=True, help="Enable auto-reload for development")
 @click.option(
@@ -675,26 +942,27 @@ def transcribe(
     help="Number of uvicorn workers",
 )
 def serve(port, host, reload, workers):
-    """Start the Cesar HTTP API server for programmatic transcription.
+    """Run the Cesar HTTP API server for programmatic transcription.
 
-    Use this command to run a persistent HTTP API server for transcription jobs.
-    The server accepts file uploads and YouTube URLs, and processes them asynchronously.
+    Use this for long-running integrations that submit jobs over HTTP instead of invoking the
+    one-shot ``transcribe`` command.
 
-    Unlike the 'transcribe' command (one-shot CLI), 'serve' is for:
-    - Long-running API server for integrations
-    - Submitting jobs via HTTP POST endpoints
-    - Processing multiple transcription requests
+    The API exposes file upload and URL transcription endpoints plus interactive docs at
+    ``/docs`` once the server is running.
 
+    \b
     Examples:
-        # Start API server on default port (5000)
-        cesar serve
-
-        # Start on custom port with auto-reload for development
-        cesar serve --port 8080 --reload
-
-        # Start with multiple workers for production
-        cesar serve --workers 4
+      cesar serve
+      cesar serve --port 8080 --reload
+      cesar serve --host 0.0.0.0 --workers 4
     """
+    try:
+        import uvicorn
+    except ImportError as exc:
+        raise click.ClickException(
+            "The API server requires uvicorn. Install Cesar with API dependencies and retry."
+        ) from exc
+
     # Print startup message (minimal per CONTEXT.md)
     console.print(f"Listening on http://{host}:{port}")
 
