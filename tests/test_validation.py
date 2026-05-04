@@ -44,8 +44,18 @@ class TestValidation(unittest.TestCase):
 
     def test_validate_input_file_exists(self):
         """Test validation of existing audio file"""
-        result = self.transcriber.validate_input_file(str(self.valid_audio_file))
+        with patch('cesar.transcriber.shutil.which', return_value=None):
+            result = self.transcriber.validate_input_file(str(self.valid_audio_file))
         self.assertEqual(result, self.valid_audio_file)
+
+    def test_validate_input_file_with_ffprobe(self):
+        """Test validation uses ffprobe when available"""
+        with patch('cesar.transcriber.shutil.which', return_value='/usr/bin/ffprobe'):
+            with patch('cesar.transcriber.subprocess.run') as mock_run:
+                mock_run.return_value = MagicMock(returncode=0)
+                result = self.transcriber.validate_input_file(str(self.valid_audio_file))
+        self.assertEqual(result, self.valid_audio_file)
+        mock_run.assert_called_once()
 
     def test_validate_input_file_not_found(self):
         """Test validation of non-existent file"""
@@ -54,8 +64,9 @@ class TestValidation(unittest.TestCase):
 
     def test_validate_input_file_unsupported_format(self):
         """Test validation of unsupported file format"""
-        with self.assertRaises(ValueError):
-            self.transcriber.validate_input_file(str(self.unsupported_file))
+        with patch('cesar.transcriber.shutil.which', return_value=None):
+            with self.assertRaises(ValueError):
+                self.transcriber.validate_input_file(str(self.unsupported_file))
 
     def test_validate_input_file_directory(self):
         """Test validation when path is a directory"""
@@ -75,11 +86,13 @@ class TestValidation(unittest.TestCase):
         self.assertEqual(result, output_path)
         self.assertTrue(output_path.parent.exists())
 
-    def test_supported_audio_formats(self):
-        """Test that all expected audio formats are supported"""
+    def test_supported_formats(self):
+        """Test that expected audio and video formats are in the fallback list"""
         from cesar.transcriber import AudioTranscriber
-        expected_formats = {'.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma'}
-        self.assertEqual(AudioTranscriber.SUPPORTED_FORMATS, expected_formats)
+        expected_audio = {'.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma'}
+        expected_video = {'.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v', '.wmv', '.flv'}
+        self.assertTrue(expected_audio.issubset(AudioTranscriber.SUPPORTED_FORMATS))
+        self.assertTrue(expected_video.issubset(AudioTranscriber.SUPPORTED_FORMATS))
 
 
 if __name__ == "__main__":

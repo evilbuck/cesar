@@ -7,14 +7,23 @@ transcription using AudioTranscriber when diarization fails.
 """
 import logging
 import time
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Optional, Callable, Any
 
-from cesar.transcriber import AudioTranscriber
+from cesar.transcriber import AudioTranscriber, TranscriptionSegment
 from cesar.diarization import DiarizationError, AuthenticationError
 from cesar.whisperx_wrapper import WhisperXPipeline, WhisperXSegment
 from cesar.transcript_formatter import MarkdownTranscriptFormatter
+from cesar.video_processor import VideoProcessor
+from cesar.ffmpeg_scene_detector import FFmpegSceneDetector
+from cesar.speech_cue_detector import SpeechCueDetector
+from cesar.association import (
+    associate_screenshots,
+    format_timestamp_for_filename,
+)
+from cesar.sidecar_generator import SidecarGenerator
+from cesar.transcript_formatter import AgentReviewMarkdownFormatter
 
 logger = logging.getLogger(__name__)
 
@@ -337,3 +346,367 @@ class TranscriptionOrchestrator:
 
         logger.info("Saved plain transcript (speaker detection unavailable)")
         return final_output
+
+
+@dataclass
+class AgentReviewResult:
+    """Result of agent-review mode processing.
+
+    Attributes:
+        output_path: Path to final output Markdown file
+        sidecar_path: Path to JSON sidecar file
+        images_dir: Directory containing screenshots
+        screenshots_count: Number of screenshots extracted
+        segments_count: Number of transcript segments
+        speakers_detected: Number of speakers found
+        audio_duration: Total media duration in seconds
+        processing_time: Total processing time in seconds
+        transcription_time: Time spent on transcription
+        screenshot_time: Time spent on screenshot extraction
+        formatting_time: Time spent on output formatting
+    """
+    output_path: Path
+    sidecar_path: Path
+    images_dir: Path
+    screenshots_count: int
+    segments_count: int
+    speakers_detected: int
+    audio_duration: float
+    processing_time: float
+    transcription_time: float
+    screenshot_time: float
+    formatting_time: float
+
+
+class AgentReviewOrchestrator:
+    """Orchestrate agent-review mode processing pipeline.
+
+    Coordinates:
+    1. Video metadata extraction
+    2. Audio transcription with diarization
+    3. Screenshot trigger detection (time-based, speech cues, scene changes)
+    4. Screenshot extraction via FFmpeg
+    5. Screenshot-to-segment association
+    6. Markdown + JSON sidecar output generation
+    """
+
+    def __init__(
+        self,
+        pipeline: Optional[WhisperXPipeline] = None,
+        transcriber: Optional[AudioTranscriber] = None,
+    ):
+        """Initialize agent-review orchestrator.
+
+        Args:
+            pipeline: Optional WhisperXPipeline for transcription with diarization.
+                     If None, uses transcriber only.
+            transcriber: AudioTranscriber for plain transcription fallback.
+        """
+        self.pipeline = pipeline
+        self.transcriber = transcriber
+        self._video_processor = VideoProcessor()
+        self._scene_detector = FFmpegSceneDetector()
+
+    def orchestrate(
+        self,
+        video_path: Path,
+        output_path: Path,
+        screenshots_interval: int = 30,
+        speech_cues: Optional[list[str]] = None,
+        scene_threshold: float = 0.3,
+        enable_scene_detection: bool = True,
+        progress_callback: Optional[Callable[[str, float], None]] = None,
+    ) -> AgentReviewResult:
+        """Run complete agent-review pipeline.
+
+        Args:
+            video_path: Path to input video file.
+            output_path: Path for output Markdown file (without extension).
+            screenshots_interval: Seconds between time-based screenshots.
+            speech_cues: List of trigger words for speech cue detection.
+                        None uses default list.
+            scene_threshold: Scene detection threshold (0.0-1.0).
+            enable_scene_detection: Whether to enable scene change detection.
+            progress_callback: Optional progress callback (step_name, percentage).
+
+        Returns:
+            AgentReviewResult with output paths and metrics.
+
+        Raises:
+            FileNotFoundError: If video file doesn't exist.
+            RuntimeError: If FFmpeg is not available.
+        """
+        start_time = time.time()
+        transcription_time = 0.0
+        screenshot_time = 0.0
+        formatting_time = 0.0
+
+        # Validate FFmpeg is available
+        if not self._video_processor.ffmpeg_available:
+            raise RuntimeError("FFmpeg is required for agent-review mode")
+
+        # Validate video file
+        self._video_processor.validate_video_file(video_path)
+
+        # Get video metadata
+        if progress_callback:
+            progress_callback("Extracting video metadata...", 0.0)
+
+        video_metadata = self._video_processor.get_video_metadata(video_path)
+        duration = video_metadata.duration
+
+        # Create output directory structure
+        # output_path is like /path/to/review.md -> we want /path/to/review/
+        output_base = output_path.with_suffix('')  # Remove .md if present
+        images_dir = output_base / "images"
+        images_dir.mkdir(parents=True, exist_ok=True)
+
+        # Step 1: Transcribe audio (0-50%)
+        if progress_callback:
+            progress_callback("Transcribing audio...", 5.0)
+
+        segments, audio_duration = self._transcribe(
+            video_path,
+            progress_callback=lambda pct: progress_callback(
+                "Transcribing...", 5.0 + pct * 0.45
+            ) if progress_callback else None
+        )
+        transcription_time = time.time() - start_time
+
+        # Step 2: Detect screenshot triggers (50-60%)
+        if progress_callback:
+            progress_callback("Detecting screenshot triggers...", 50.0)
+
+        all_timestamps: list[tuple[float, str, str]] = []  # (timestamp, filename, trigger_type)
+
+        # 2a: Time-based timestamps
+        from cesar.ffmpeg_scene_detector import generate_time_based_timestamps
+        time_timestamps = generate_time_based_timestamps(duration, screenshots_interval)
+        for ts in time_timestamps:
+            filename = f"{output_base.stem}_{format_timestamp_for_filename(ts)}.png"
+            all_timestamps.append((ts, filename, "time"))
+
+        # 2b: Speech cue timestamps
+        if speech_cues:
+            detector = SpeechCueDetector(speech_cues)
+        else:
+            detector = SpeechCueDetector()  # Uses default cues
+
+        cue_matches = detector.detect_cues(segments)
+        for match in cue_matches:
+            filename = f"{output_base.stem}_{format_timestamp_for_filename(match.timestamp)}.png"
+            all_timestamps.append((match.timestamp, filename, "speech_cue"))
+
+        # 2c: Scene change timestamps
+        if enable_scene_detection:
+            try:
+                scene_timestamps = self._scene_detector.detect_scenes(
+                    video_path,
+                    threshold=scene_threshold
+                )
+                for ts in scene_timestamps:
+                    filename = f"{output_base.stem}_{format_timestamp_for_filename(ts)}.png"
+                    all_timestamps.append((ts, filename, "scene_change"))
+            except Exception as e:
+                logger.warning(f"Scene detection failed, continuing without: {e}")
+
+        # Deduplicate timestamps
+        all_timestamps = self._deduplicate_timestamps(all_timestamps)
+
+        # Step 3: Extract screenshots (60-90%)
+        if progress_callback:
+            progress_callback(f"Extracting {len(all_timestamps)} screenshots...", 60.0)
+
+        screenshot_start = time.time()
+        successful_screenshots: list[tuple[float, str]] = []
+
+        for i, (timestamp, filename, trigger_type) in enumerate(all_timestamps):
+            output_file = images_dir / Path(filename).name
+            try:
+                self._video_processor.extract_frame(
+                    video_path,
+                    timestamp,
+                    output_file
+                )
+                successful_screenshots.append((timestamp, output_file.name))
+            except Exception as e:
+                logger.warning(f"Failed to extract screenshot at {timestamp}s: {e}")
+
+            # Update progress
+            if progress_callback and len(all_timestamps) > 0:
+                pct = 60.0 + (i + 1) / len(all_timestamps) * 30.0
+                progress_callback(f"Extracting screenshots... ({i + 1}/{len(all_timestamps)})", pct)
+
+        screenshot_time = time.time() - screenshot_start
+
+        # Step 4: Associate screenshots with segments
+        if progress_callback:
+            progress_callback("Associating screenshots with transcript...", 90.0)
+
+        # Build association data
+        associations = []
+        trigger_groups = {
+            "time": [],
+            "speech_cue": [],
+            "scene_change": [],
+        }
+
+        for timestamp, filename, trigger_type in all_timestamps:
+            # Find segments containing this timestamp
+            overlapping = []
+            for seg in segments:
+                # Tolerance of 2 seconds
+                if seg.start <= timestamp + 2.0 and seg.end >= timestamp - 2.0:
+                    overlapping.append(seg)
+
+            # Find cue word if speech cue
+            cue_word = None
+            if trigger_type == "speech_cue":
+                for match in cue_matches:
+                    if abs(match.timestamp - timestamp) < 1.0:
+                        cue_word = match.cue_word
+                        break
+
+            from cesar.association import ScreenshotAssociation
+            associations.append(ScreenshotAssociation(
+                timestamp=timestamp,
+                filename=filename,
+                trigger_type=trigger_type,
+                segments=overlapping,
+                cue_word=cue_word,
+            ))
+
+        # Step 5: Generate outputs (90-100%)
+        formatting_start = time.time()
+
+        # Generate sidecar
+        if progress_callback:
+            progress_callback("Generating sidecar...", 92.0)
+
+        sidecar_gen = SidecarGenerator(
+            output_path=output_base,
+            source_path=video_path,
+            duration=duration,
+        )
+        sidecar_gen.configure(
+            screenshots_interval=screenshots_interval,
+            speech_cues_enabled=speech_cues is not None or True,  # Always enabled if cue detector has defaults
+            scene_detection_enabled=enable_scene_detection,
+        )
+        sidecar_path = sidecar_gen.generate(segments, associations)
+
+        # Generate Markdown
+        if progress_callback:
+            progress_callback("Generating Markdown...", 95.0)
+
+        formatter = AgentReviewMarkdownFormatter(
+            source_path=video_path,
+            duration=duration,
+            output_name=output_base.stem,
+            images_dir=images_dir,
+        )
+        markdown_content = formatter.format(segments, associations)
+
+        # Write Markdown file
+        final_output_path = output_base.with_suffix('.md')
+        with open(final_output_path, 'w', encoding='utf-8') as f:
+            f.write(markdown_content)
+
+        formatting_time = time.time() - formatting_start
+        total_time = time.time() - start_time
+
+        # Count unique speakers
+        speakers = set()
+        for seg in segments:
+            if seg.speaker:
+                speakers.add(seg.speaker)
+
+        if progress_callback:
+            progress_callback("Complete", 100.0)
+
+        return AgentReviewResult(
+            output_path=final_output_path,
+            sidecar_path=sidecar_path,
+            images_dir=images_dir,
+            screenshots_count=len(successful_screenshots),
+            segments_count=len(segments),
+            speakers_detected=len(speakers),
+            audio_duration=duration,
+            processing_time=total_time,
+            transcription_time=transcription_time,
+            screenshot_time=screenshot_time,
+            formatting_time=formatting_time,
+        )
+
+    def _transcribe(
+        self,
+        video_path: Path,
+        progress_callback: Optional[Callable[[float], None]] = None,
+    ) -> tuple[list[TranscriptionSegment], float]:
+        """Transcribe audio from video.
+
+        Args:
+            video_path: Path to video file.
+            progress_callback: Optional progress callback (percentage 0-100).
+
+        Returns:
+            Tuple of (segments, duration).
+        """
+        # First try WhisperXPipeline with diarization if available
+        if self.pipeline is not None:
+            try:
+                segments, speakers, duration = self.pipeline.transcribe_and_diarize(
+                    str(video_path),
+                    progress_callback=progress_callback,
+                )
+                # Convert WhisperXSegments to TranscriptionSegments
+                transcription_segments = []
+                for i, seg in enumerate(segments, start=1):
+                    transcription_segments.append(TranscriptionSegment(
+                        start=seg.start,
+                        end=seg.end,
+                        text=seg.text,
+                        speaker=seg.speaker,
+                        segment_id=f"seg_{i:03d}",
+                    ))
+                return transcription_segments, duration
+            except Exception as e:
+                logger.warning(f"Pipeline transcription failed: {e}. Falling back.")
+
+        # Fallback to plain transcription
+        if self.transcriber is not None:
+            segments, metadata = self.transcriber.transcribe_to_segments(
+                str(video_path),
+                progress_callback=progress_callback,
+            )
+            return segments, metadata['audio_duration']
+
+        raise ValueError("No transcription method available")
+
+    def _deduplicate_timestamps(
+        self,
+        timestamps: list[tuple[float, str, str]],
+        tolerance: float = 1.0,
+    ) -> list[tuple[float, str, str]]:
+        """Deduplicate timestamps within tolerance.
+
+        Args:
+            timestamps: List of (timestamp, filename, trigger_type) tuples.
+            tolerance: Seconds within which timestamps are considered duplicates.
+
+        Returns:
+            Deduplicated list, preserving first occurrence.
+        """
+        if not timestamps:
+            return []
+
+        # Sort by timestamp
+        sorted_ts = sorted(timestamps, key=lambda x: x[0])
+        result = [sorted_ts[0]]
+
+        for current in sorted_ts[1:]:
+            last = result[-1]
+            if current[0] - last[0] >= tolerance:
+                result.append(current)
+
+        return result

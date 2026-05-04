@@ -218,6 +218,105 @@ class TestCLI(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
 
 
+class TestTranscriptionModes(unittest.TestCase):
+    """Tests for --mode flag and mode-specific behavior."""
+
+    def setUp(self):
+        """Set up test environment."""
+        self.runner = CliRunner()
+        self.temp_dir = tempfile.mkdtemp()
+        # Create a test video file
+        self.test_video = Path(self.temp_dir) / "test.mp4"
+        self.test_video.touch()
+        self.output_file = Path(self.temp_dir) / "output.txt"
+
+    def tearDown(self):
+        """Clean up test files."""
+        import shutil
+        shutil.rmtree(self.temp_dir)
+
+    def test_mode_option_present(self):
+        """Test that --mode option is available in transcribe help."""
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("--mode", result.output)
+
+    def test_mode_choices_shown(self):
+        """Test that mode choices are displayed in help."""
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("transcription", result.output.lower())
+        self.assertIn("agent-review", result.output.lower())
+
+    def test_mode_agent_review_options_present(self):
+        """Test that agent-review specific options are shown."""
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
+        self.assertEqual(result.exit_code, 0)
+        self.assertIn("--screenshots-interval", result.output)
+        self.assertIn("--speech-cues", result.output)
+        self.assertIn("--scene-threshold", result.output)
+        self.assertIn("--no-scene-detection", result.output)
+
+    @patch("cesar.video_processor.VideoProcessor")
+    def test_mode_agent_review_rejects_youtube_url(self, mock_vp_class):
+        """Test that agent-review mode rejects YouTube URLs."""
+        # Mock video processor to report FFmpeg available
+        mock_vp = MagicMock()
+        mock_vp.ffmpeg_available = True
+        mock_vp_class.return_value = mock_vp
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "transcribe",
+                "https://www.youtube.com/watch?v=test123",
+                "-o",
+                str(self.output_file),
+                "--mode",
+                "agent-review",
+            ],
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        output_text = result.output + (result.stderr or "")
+        self.assertIn("agent-review", output_text.lower())
+        self.assertIn("local video", output_text.lower())
+
+    @patch("cesar.video_processor.VideoProcessor")
+    def test_mode_agent_review_requires_ffmpeg(self, mock_vp_class):
+        """Test that agent-review mode requires FFmpeg."""
+        # Mock video processor to report FFmpeg NOT available
+        mock_vp = MagicMock()
+        mock_vp.ffmpeg_available = False
+        mock_vp_class.return_value = mock_vp
+
+        result = self.runner.invoke(
+            cli,
+            [
+                "transcribe",
+                str(self.test_video),
+                "-o",
+                str(self.output_file),
+                "--mode",
+                "agent-review",
+            ],
+        )
+
+        self.assertNotEqual(result.exit_code, 0)
+        output_text = result.output + (result.stderr or "")
+        self.assertIn("FFmpeg", output_text)
+
+    def test_mode_agent_review_options_defaults(self):
+        """Test that agent-review options have correct defaults."""
+        result = self.runner.invoke(cli, ["transcribe", "--help"])
+        self.assertEqual(result.exit_code, 0)
+        # Check default values are shown
+        self.assertIn("30", result.output)  # Default interval
+        self.assertIn("0.3", result.output)  # Default scene threshold
+        # Default speech cues should be mentioned
+        self.assertIn("speech", result.output.lower())
+
+
 class TestCommandsDiscovery(unittest.TestCase):
     """Tests for machine-readable CLI discovery."""
 

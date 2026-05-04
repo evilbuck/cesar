@@ -2,6 +2,7 @@
 Core audio transcription functionality using faster-whisper
 """
 import os
+import shutil
 import time
 import subprocess
 from dataclasses import dataclass
@@ -13,16 +14,26 @@ from cesar.device_detection import OptimalConfiguration, setup_environment
 
 @dataclass
 class TranscriptionSegment:
-    """Segment from Whisper transcription."""
+    """Segment from Whisper transcription.
+
+    Attributes:
+        start: Start time in seconds.
+        end: End time in seconds.
+        text: The transcribed text content.
+        speaker: Optional speaker label (e.g., "SPEAKER_00").
+        segment_id: Optional segment identifier (e.g., "seg_001").
+    """
     start: float
     end: float
     text: str
+    speaker: Optional[str] = None
+    segment_id: Optional[str] = None
 
 
 class AudioTranscriber:
     """Core audio transcription class using faster-whisper"""
 
-    SUPPORTED_FORMATS = {'.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma'}
+    SUPPORTED_FORMATS = {'.mp3', '.wav', '.m4a', '.ogg', '.flac', '.aac', '.wma', '.mp4', '.mkv', '.avi', '.mov', '.webm', '.m4v', '.wmv', '.flv'}
 
     def __init__(self, model_size: str = "base", device: Optional[str] = None, compute_type: Optional[str] = None,
                  batch_size: Optional[int] = None, num_workers: Optional[int] = None):
@@ -82,17 +93,21 @@ class AudioTranscriber:
 
     def validate_input_file(self, file_path: str) -> Path:
         """
-        Validate input audio file
+        Validate input media file.
+
+        Uses ffprobe when available to verify the file is readable by FFmpeg,
+        falling back to extension-based checks if ffprobe is not installed.
+        This allows any format supported by the installed FFmpeg to work.
 
         Args:
-            file_path: Path to the audio file
+            file_path: Path to the media file
 
         Returns:
             Path object of validated file
 
         Raises:
             FileNotFoundError: If file doesn't exist
-            ValueError: If file is not a valid audio file
+            ValueError: If file is not a valid media file
         """
         path = Path(file_path)
 
@@ -102,10 +117,24 @@ class AudioTranscriber:
         if not path.is_file():
             raise ValueError(f"Path is not a file: {file_path}")
 
-        if path.suffix.lower() not in self.SUPPORTED_FORMATS:
+        ffprobe = shutil.which('ffprobe')
+        if ffprobe:
+            try:
+                subprocess.run(
+                    [ffprobe, '-v', 'error', '-show_entries', 'format=duration',
+                     '-of', 'default=noprint_wrappers=1:nokey=1', str(path)],
+                    capture_output=True,
+                    check=True,
+                )
+            except subprocess.CalledProcessError:
+                raise ValueError(
+                    f"Unsupported format or unreadable file: {path.suffix or path.name}. "
+                    f"Ensure the file is a valid media format supported by your installed FFmpeg."
+                )
+        elif path.suffix.lower() not in self.SUPPORTED_FORMATS:
             raise ValueError(
-                f"Unsupported audio format: {path.suffix}. "
-                f"Supported: {', '.join(self.SUPPORTED_FORMATS)}"
+                f"Unsupported format: {path.suffix}. "
+                f"Supported: {', '.join(sorted(self.SUPPORTED_FORMATS))}"
             )
 
         return path
@@ -334,12 +363,13 @@ class AudioTranscriber:
         last_segment_end = 0
         last_progress_update = time.time()
 
-        for segment in segments_iter:
+        for idx, segment in enumerate(segments_iter, start=1):
             # Add segment to list
             segments.append(TranscriptionSegment(
                 start=segment.start,
                 end=segment.end,
-                text=segment.text.strip()
+                text=segment.text.strip(),
+                segment_id=f"seg_{idx:03d}"
             ))
 
             segment_count += 1

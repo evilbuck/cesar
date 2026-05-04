@@ -32,7 +32,7 @@ from cesar.config import (
 )
 from cesar.transcriber import AudioTranscriber
 from cesar.utils import format_time, estimate_processing_time
-from cesar.orchestrator import TranscriptionOrchestrator, OrchestrationResult
+from cesar.orchestrator import TranscriptionOrchestrator, OrchestrationResult, AgentReviewOrchestrator, AgentReviewResult
 from cesar.diarization import DiarizationError, AuthenticationError
 from cesar.whisperx_wrapper import WhisperXPipeline
 from cesar.youtube_handler import (
@@ -450,48 +450,74 @@ def commands(as_json):
     help="Project directory to install the skill into",
 )
 @click.option(
+    "--global", "global_install",
+    is_flag=True,
+    help="Install globally for all agent platforms (Pi, Claude Code, OpenCode, Codex)",
+)
+@click.option(
+    "--platform", "platforms",
+    multiple=True,
+    type=click.Choice(["pi", "claude", "opencode", "codex", "agents"]),
+    help="Install to specific platform(s). Can be repeated. Default: all platforms.",
+)
+@click.option(
     "--force",
     is_flag=True,
     help="Overwrite existing skill if it already exists",
 )
-def skill(action, target_path, force):
-    """Deploy the Cesar agent skill to a project directory.
+def skill(action, target_path, global_install, platforms, force):
+    """Deploy the Cesar agent skill for AI agent integration.
 
-    Installs the ``cesar-transcribe`` skill into ``<path>/.agents/skills/`` so that
-    AI agents in that project can discover and use Cesar for audio transcription.
+    By default, installs into ``<path>/.agents/skills/`` for the current project.
+    Use ``--global`` to install across all agent platforms globally.
 
     \b
     Examples:
-      cesar skill install                 # Install into current directory
+      cesar skill install                 # Install into current project
       cesar skill install --path ~/proj   # Install into a specific project
+      cesar skill install --global        # Install globally for all platforms
+      cesar skill install --global --platform pi --platform claude  # Specific platforms
       cesar skill install --force         # Overwrite existing skill
     """
     if action == "install":
-        _install_skill(target_path, force)
+        if global_install:
+            _install_skill_global(platforms, force)
+        else:
+            _install_skill(target_path, force)
 
 
-def _install_skill(target_path: Path, force: bool = False) -> None:
-    """Copy bundled skill files into the target project's .agents/skills/ directory."""
-    # Locate bundled skill directory relative to this package
+# Global skill directories for each agent platform
+_GLOBAL_SKILL_DIRS = {
+    "pi": Path.home() / ".pi" / "agent" / "skills",
+    "claude": Path.home() / ".claude" / "skills",
+    "opencode": Path.home() / ".config" / "opencode" / "skills",
+    "codex": Path.home() / ".codex" / "skills",
+    "agents": Path.home() / ".agents" / "skills",
+}
+
+
+def _get_source_skill() -> Path:
+    """Locate the bundled skill directory in the package."""
     package_dir = Path(__file__).parent
     source_skill = package_dir / "skills" / "cesar-transcribe"
-
     if not source_skill.is_dir():
         raise click.ClickException(
             "Agent skill not found in package. "
             "Reinstall cesar to get the bundled skill."
         )
+    return source_skill
 
-    skill_dest = target_path.resolve() / ".agents" / "skills" / "cesar-transcribe"
+
+def _copy_skill(source: Path, dest: Path, force: bool = False) -> bool:
+    """Copy skill files from source to dest. Returns True if installed."""
+    skill_dest = dest / "cesar-transcribe"
 
     if skill_dest.exists() and not force:
-        raise click.ClickException(
-            f"Skill already exists at {skill_dest}. Use --force to overwrite."
-        )
+        console.print(f"[yellow]⊘[/yellow] Already exists at {skill_dest} (use --force to overwrite)")
+        return False
 
-    # Create destination and copy files
     skill_dest.mkdir(parents=True, exist_ok=True)
-    for item in source_skill.iterdir():
+    for item in source.iterdir():
         dest_file = skill_dest / item.name
         if item.is_file():
             shutil.copy2(item, dest_file)
@@ -501,9 +527,51 @@ def _install_skill(target_path: Path, force: bool = False) -> None:
             shutil.copytree(item, dest_file)
 
     console.print(f"[green]✓[/green] Installed cesar-transcribe skill to {skill_dest}")
-    console.print(
-        "[dim]Agents in this project can now transcribe audio using Cesar.[/dim]"
-    )
+    return True
+
+
+def _install_skill(target_path: Path, force: bool = False) -> None:
+    """Copy bundled skill files into the target project's .agents/skills/ directory."""
+    source_skill = _get_source_skill()
+    skill_dir = target_path.resolve() / ".agents" / "skills"
+    installed = _copy_skill(source_skill, skill_dir, force)
+    if installed:
+        console.print(
+            "[dim]Agents in this project can now transcribe audio using Cesar.[/dim]"
+        )
+
+
+def _install_skill_global(platforms: tuple, force: bool = False) -> None:
+    """Install skill globally for one or more agent platforms."""
+    source_skill = _get_source_skill()
+
+    # Default to all platforms if none specified
+    target_platforms = dict(_GLOBAL_SKILL_DIRS)
+    if platforms:
+        target_platforms = {
+            name: path for name, path in target_platforms.items()
+            if name in platforms
+        }
+
+    installed_count = 0
+    for name, skill_dir in target_platforms.items():
+        console.print(f"[dim]Installing for {name}...[/dim]")
+        if _copy_skill(source_skill, skill_dir, force):
+            installed_count += 1
+
+    if installed_count > 0:
+        platform_names = ", ".join(target_platforms.keys())
+        console.print(
+            f"\n[green]✓[/green] Installed cesar-transcribe skill globally "
+            f"({installed_count}/{len(target_platforms)} platforms: {platform_names})"
+        )
+        console.print(
+            "[dim]Agents on this machine can now transcribe audio using Cesar.[/dim]"
+        )
+    else:
+        console.print(
+            "[yellow]No new installations. Use --force to overwrite existing skills.[/yellow]"
+        )
 
 
 @cli.command(
@@ -585,6 +653,45 @@ def _install_skill(target_path: Path, force: bool = False) -> None:
     show_default=True,
     help="Enable speaker identification (disable with --no-diarize)",
 )
+@click.option(
+    "--mode",
+    "transcription_mode",
+    type=click.Choice(["transcription", "agent-review"], case_sensitive=False),
+    default="transcription",
+    show_default=True,
+    help="Transcription mode: 'transcription' for text output, 'agent-review' for screenshots and metadata",
+)
+@click.option(
+    "--screenshots-interval",
+    "screenshots_interval",
+    type=click.IntRange(min=5),
+    default=30,
+    show_default=True,
+    help="Time interval (seconds) between time-based screenshots in agent-review mode",
+)
+@click.option(
+    "--speech-cues",
+    "speech_cues",
+    type=str,
+    default="this,here,that,look at,notice,pay attention,see how,issue,problem,bug,wrong,broken",
+    show_default="default list",
+    help="Comma-separated trigger words that prompt screenshot capture in agent-review mode",
+)
+@click.option(
+    "--scene-threshold",
+    "scene_threshold",
+    type=click.FloatRange(min=0.0, max=1.0),
+    default=0.3,
+    show_default=True,
+    help="Scene change detection sensitivity threshold (0.0-1.0) in agent-review mode",
+)
+@click.option(
+    "--no-scene-detection",
+    "enable_scene_detection",
+    is_flag=True,
+    default=False,
+    help="Disable scene change detection in agent-review mode",
+)
 @click.pass_context
 def transcribe(
     ctx,
@@ -601,6 +708,11 @@ def transcribe(
     start_time,
     end_time,
     diarize,
+    transcription_mode,
+    screenshots_interval,
+    speech_cues,
+    scene_threshold,
+    enable_scene_detection,
 ):
     """Transcribe a local audio file or YouTube URL.
 
@@ -609,6 +721,7 @@ def transcribe(
     \b
     Accepted input:
       - local audio file: mp3, wav, m4a, ogg, flac, aac, wma
+      - local video file: mp4, mkv, avi, mov, webm (in agent-review mode)
       - YouTube URL (requires FFmpeg)
 
     \b
@@ -618,10 +731,23 @@ def transcribe(
       - output extensions are auto-corrected when needed
 
     \b
+    Modes:
+      - 'transcription' (default): Standard text transcription
+      - 'agent-review': Captures screenshots from video with transcript segments
+
+    \b
+    Agent-review mode (--mode agent-review):
+      - Requires a video file as input (not YouTube URLs)
+      - Extracts screenshots at intervals, scene changes, and speech cues
+      - Generates: transcript.md, sidecar.json, images/ folder
+      - Customizable via --screenshots-interval, --speech-cues, --scene-threshold
+
+    \b
     Automation tips:
       - use --quiet for cleaner machine-readable logs
       - use --no-diarize when plain text is easier to consume
       - use --start-time / --end-time to transcribe a clip
+      - use --mode agent-review for screen recording analysis
 
     \b
     Examples:
@@ -629,6 +755,8 @@ def transcribe(
       cesar transcribe audio.mp3 -o transcript.txt --no-diarize --quiet
       cesar transcribe interview.wav -o interview.md --model large
       cesar transcribe "https://youtube.com/watch?v=VIDEO_ID" -o transcript.txt
+      cesar transcribe recording.mp4 -o review.md --mode agent-review
+      cesar transcribe recording.mp4 -o review.md --mode agent-review --screenshots-interval 60
     """
     # Get config from context
     config = ctx.obj.get("config", CesarConfig())
@@ -650,6 +778,30 @@ def transcribe(
         console.print(f"[red]{error_msg}[/red]")
         click.echo(error_msg, err=True)
         sys.exit(1)
+
+    # Validate agent-review mode requirements
+    if transcription_mode == "agent-review":
+        # Import here to avoid circular imports and to check availability
+        from cesar.video_processor import VideoProcessor
+
+        video_processor = VideoProcessor()
+
+        # Check if input is a URL (not supported for agent-review)
+        if input_source.startswith("http://") or input_source.startswith("https://"):
+            error_msg = "Error: agent-review mode requires a local video file (YouTube URLs not supported)"
+            console.print(f"[red]{error_msg}[/red]")
+            click.echo(error_msg, err=True)
+            sys.exit(1)
+
+        # Check if FFmpeg is available
+        if not video_processor.ffmpeg_available:
+            error_msg = "Error: FFmpeg is required for agent-review mode. Install FFmpeg and ensure it's in your PATH."
+            console.print(f"[red]{error_msg}[/red]")
+            click.echo(error_msg, err=True)
+            sys.exit(1)
+
+        # Parse speech cues into a list
+        parsed_speech_cues = [cue.strip() for cue in speech_cues.split(",") if cue.strip()]
 
     # Track temp file for cleanup
     temp_audio_path = None
@@ -774,7 +926,58 @@ def transcribe(
         transcription_start_time = time.time()
 
         with progress_tracker:
-            if diarize and pipeline is not None:
+            # Check for agent-review mode (full pipeline with screenshots)
+            if transcription_mode == "agent-review":
+                from cesar.speech_cue_detector import SpeechCueDetector
+                
+                # Parse speech cues from CLI argument
+                parsed_speech_cues = [cue.strip() for cue in speech_cues.split(",") if cue.strip()]
+                
+                # Create agent-review orchestrator
+                agent_orchestrator = AgentReviewOrchestrator(
+                    pipeline=pipeline,
+                    transcriber=transcriber,
+                )
+                
+                if not quiet:
+                    console.print(f"\n[bold]Running agent-review mode...[/bold]")
+                
+                # Run agent-review pipeline
+                result = agent_orchestrator.orchestrate(
+                    video_path=input_file,
+                    output_path=output,
+                    screenshots_interval=screenshots_interval,
+                    speech_cues=parsed_speech_cues if parsed_speech_cues else None,
+                    scene_threshold=scene_threshold,
+                    enable_scene_detection=not enable_scene_detection,
+                    progress_callback=lambda step, pct: progress_tracker.update_step(
+                        step, pct
+                    )
+                    if not quiet
+                    else None,
+                )
+                
+                # Show agent-review results
+                if not quiet:
+                    console.print(f"\n[bold green]Agent-review completed![/bold green]")
+                    console.print(f"  Screenshots: [cyan]{result.screenshots_count}[/cyan]")
+                    console.print(f"  Segments: [cyan]{result.segments_count}[/cyan]")
+                    console.print(f"  Speakers: [cyan]{result.speakers_detected}[/cyan]")
+                    console.print(f"  Duration: [blue]{format_time(result.audio_duration)}[/blue]")
+                    console.print(f"\n  Output files:")
+                    console.print(f"    Markdown: [green]{result.output_path}[/green]")
+                    console.print(f"    Sidecar: [green]{result.sidecar_path}[/green]")
+                    console.print(f"    Images: [green]{result.images_dir}/[/green]")
+                    console.print(f"\n  Processing time breakdown:")
+                    console.print(f"    Transcription: [blue]{format_time(result.transcription_time)}[/blue]")
+                    console.print(f"    Screenshots: [blue]{format_time(result.screenshot_time)}[/blue]")
+                    console.print(f"    Formatting: [blue]{format_time(result.formatting_time)}[/blue]")
+                else:
+                    console.print(f"Agent-review completed: {result.output_path}")
+                
+                return 0
+
+            elif diarize and pipeline is not None:
                 # Use orchestrator for diarized transcription
                 orchestrator = TranscriptionOrchestrator(
                     pipeline=pipeline,
