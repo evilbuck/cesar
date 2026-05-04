@@ -146,28 +146,33 @@ class TestSidecarGenerator(unittest.TestCase):
     def setUp(self):
         """Set up test environment"""
         self.temp_dir = tempfile.mkdtemp()
-        self.output_path = Path(self.temp_dir) / "review"
+        self.output_dir = Path(self.temp_dir) / "review"
+        self.output_dir.mkdir()
+        self.output_name = "review"
         self.source_path = Path(self.temp_dir) / "video.mp4"
         self.duration = 120.5
 
     def test_generator_initialization(self):
         """Test generator can be initialized"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
 
-        self.assertEqual(generator.output_path, self.output_path)
+        self.assertEqual(generator.output_dir, self.output_dir)
+        self.assertEqual(generator.output_name, self.output_name)
         self.assertEqual(generator.source_path, self.source_path)
         self.assertEqual(generator.duration, self.duration)
-        expected_sidecar_path = self.output_path.with_suffix('.sidecar.json')
+        expected_sidecar_path = self.output_dir / "review.sidecar.json"
         self.assertEqual(generator.sidecar_path, expected_sidecar_path)
 
     def test_configure(self):
         """Test configuration options"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -185,7 +190,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_build_metadata(self):
         """Test metadata building"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -203,7 +209,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_serialize_segments_empty(self):
         """Test serializing empty segment list"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -214,7 +221,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_serialize_segments(self):
         """Test serializing transcript segments"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -249,7 +257,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_serialize_segments_skips_short(self):
         """Test that very short segments are skipped"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -277,7 +286,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_serialize_screenshots_empty(self):
         """Test serializing empty screenshot list"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -288,7 +298,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_serialize_screenshots(self):
         """Test serializing screenshot associations"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -333,7 +344,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_to_dict(self):
         """Test generating sidecar as dictionary"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -368,7 +380,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_generate_writes_file(self):
         """Test that generate() writes a JSON file"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )
@@ -407,7 +420,8 @@ class TestSidecarGenerator(unittest.TestCase):
     def test_generated_json_structure(self):
         """Test the structure of generated JSON matches schema"""
         generator = SidecarGenerator(
-            output_path=self.output_path,
+            output_dir=self.output_dir,
+            output_name=self.output_name,
             source_path=self.source_path,
             duration=self.duration,
         )

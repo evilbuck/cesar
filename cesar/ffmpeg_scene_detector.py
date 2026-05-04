@@ -120,10 +120,13 @@ class FFmpegSceneDetector:
         Returns:
             List of scene change timestamps.
         """
+        # scdet expects threshold on a 0-100 scale, while Cesar exposes the
+        # same 0.0-1.0 scale used by FFmpeg's select=gt(scene,...) fallback.
+        scdet_threshold = threshold * 100
         cmd = [
             'ffmpeg',
             '-i', str(video_path),
-            '-filter:v', f"scdet=s={threshold}",
+            '-filter:v', f"scdet=threshold={scdet_threshold:g}",
             '-f', 'null',
             '-'
         ]

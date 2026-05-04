@@ -96,21 +96,24 @@ class ReviewSidecar:
 class SidecarGenerator:
     """Generate JSON sidecar files for agent-review mode."""
 
-    def __init__(self, output_path: Path, source_path: Path, duration: float):
+    def __init__(self, output_dir: Path, output_name: str, source_path: Path, duration: float):
         """Initialize sidecar generator.
 
         Args:
-            output_path: Path to output file (without extension).
-                        The sidecar will be saved as `{output_path}.sidecar.json`.
+            output_dir: Directory where all output artifacts are placed.
+            output_name: Base name for output files (e.g., "review").
+                        The sidecar will be saved as
+                        ``{output_dir}/{output_name}.sidecar.json``.
             source_path: Path to the original media file.
             duration: Total media duration in seconds.
         """
-        self.output_path = output_path
+        self.output_dir = output_dir
+        self.output_name = output_name
         self.source_path = source_path
         self.duration = duration
 
-        # Build sidecar path
-        self.sidecar_path = output_path.with_suffix('.sidecar.json')
+        # Build sidecar path inside the output directory
+        self.sidecar_path = output_dir / f"{output_name}.sidecar.json"
 
         # Set default values that can be configured
         self._screenshots_interval = 30
@@ -139,7 +142,7 @@ class SidecarGenerator:
         return ReviewMetadata(
             mode="agent-review",
             source=str(self.source_path),
-            output_name=self.output_path.stem,
+            output_name=self.output_name,
             duration=self.duration,
             created_at=datetime.now().isoformat(),
             screenshots_interval=self._screenshots_interval,

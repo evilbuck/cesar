@@ -63,6 +63,8 @@ class TestFFmpegSceneDetector(unittest.TestCase):
         )
 
         result = self.detector.detect_scenes(self.video_path)
+        cmd = mock_run.call_args.args[0]
+        self.assertIn("scdet=threshold=30", cmd)
         self.assertEqual(len(result), 3)
         self.assertAlmostEqual(result[0], 5.123, places=3)
         self.assertAlmostEqual(result[1], 12.456, places=3)

@@ -328,5 +328,80 @@ class TestVideoMetadata(unittest.TestCase):
         self.assertEqual(metadata.file_size, 1048576)
 
 
+class TestExtractAudio(unittest.TestCase):
+    """Test audio extraction from video files"""
+
+    def setUp(self):
+        """Set up test environment"""
+        self.temp_dir = tempfile.mkdtemp()
+        self.processor = VideoProcessor()
+
+    def tearDown(self):
+        """Clean up test files"""
+        shutil.rmtree(self.temp_dir)
+
+    def test_extract_audio_no_ffmpeg(self):
+        """Test extract_audio raises when FFmpeg is unavailable"""
+        self.processor._ffmpeg_available = False
+        video = Path(self.temp_dir) / "video.mp4"
+        video.touch()
+        output = Path(self.temp_dir) / "audio.mp3"
+
+        with self.assertRaises(RuntimeError) as ctx:
+            self.processor.extract_audio(video, output)
+        self.assertIn("FFmpeg is not available", str(ctx.exception))
+
+    @patch('cesar.video_processor.subprocess.run')
+    def test_extract_audio_success(self, mock_run):
+        """Test successful audio extraction"""
+        mock_run.return_value = MagicMock(returncode=0)
+        self.processor._ffmpeg_available = True
+
+        video = Path(self.temp_dir) / "video.mp4"
+        video.touch()
+        output = Path(self.temp_dir) / "output" / "audio.mp3"
+
+        result = self.processor.extract_audio(video, output)
+
+        self.assertEqual(result, output)
+        self.assertEqual(mock_run.call_count, 2)  # validate (ffprobe) + extract (ffmpeg)
+        # Verify FFmpeg extraction args (second call)
+        cmd = mock_run.call_args_list[1][0][0]
+        self.assertEqual(cmd[0], "ffmpeg")
+        self.assertIn("-vn", cmd)
+        self.assertIn("-ab", cmd)
+
+    @patch('cesar.video_processor.subprocess.run')
+    def test_extract_audio_creates_output_dir(self, mock_run):
+        """Test that extract_audio creates output directory if needed"""
+        mock_run.return_value = MagicMock(returncode=0)
+        self.processor._ffmpeg_available = True
+
+        video = Path(self.temp_dir) / "video.mp4"
+        video.touch()
+        output = Path(self.temp_dir) / "nested" / "dir" / "audio.mp3"
+
+        self.processor.extract_audio(video, output)
+
+        # Output directory should have been created
+        self.assertTrue(output.parent.exists())
+
+    @patch('cesar.video_processor.subprocess.run')
+    def test_extract_audio_ffmpeg_failure(self, mock_run):
+        """Test audio extraction handles FFmpeg errors"""
+        mock_run.side_effect = subprocess.CalledProcessError(
+            1, "ffmpeg", stderr="No audio stream found"
+        )
+        self.processor._ffmpeg_available = True
+
+        video = Path(self.temp_dir) / "video.mp4"
+        video.touch()
+        output = Path(self.temp_dir) / "audio.mp3"
+
+        with self.assertRaises(RuntimeError) as ctx:
+            self.processor.extract_audio(video, output)
+        self.assertIn("Failed to extract audio", str(ctx.exception))
+
+
 if __name__ == '__main__':
     unittest.main()

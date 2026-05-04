@@ -330,3 +330,61 @@ class VideoProcessor:
             )
 
         return extracted_paths
+
+    def extract_audio(
+        self,
+        file_path: Path,
+        output_path: Path,
+        audio_format: str = "mp3",
+        bitrate: str = "192k",
+    ) -> Path:
+        """Extract the audio track from a video file.
+
+        Uses FFmpeg to extract and encode the audio stream from a video
+        file into a standalone audio file.
+
+        Args:
+            file_path: Path to the video file.
+            output_path: Path where the audio file will be saved.
+                         Must include the extension (e.g., ``audio.mp3``).
+            audio_format: Output audio format (e.g., 'mp3', 'wav', 'aac').
+                         Default: 'mp3'.
+            bitrate: Audio bitrate for lossy formats. Default: '192k'.
+
+        Returns:
+            Path to the extracted audio file.
+
+        Raises:
+            RuntimeError: If FFmpeg is not available or extraction fails.
+        """
+        if not self.ffmpeg_available:
+            raise RuntimeError("FFmpeg is not available. Cannot extract audio.")
+
+        file_path = self.validate_video_file(file_path)
+
+        # Ensure output directory exists
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
+        cmd = [
+            "ffmpeg",
+            "-y",  # Overwrite output without asking
+            "-i", str(file_path),
+            "-vn",  # No video
+            "-acodec", "libmp3lame" if audio_format == "mp3" else "copy",
+            "-ab", bitrate,
+            str(output_path),
+        ]
+
+        try:
+            result = subprocess.run(
+                cmd,
+                capture_output=True,
+                text=True,
+                check=True,
+            )
+            logger.debug(f"Extracted audio from {file_path} to {output_path}")
+            return output_path
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(
+                f"Failed to extract audio from {file_path}: {e.stderr}"
+            )

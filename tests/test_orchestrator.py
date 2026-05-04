@@ -10,7 +10,11 @@ from unittest.mock import MagicMock, patch
 import tempfile
 import json
 
-from cesar.orchestrator import TranscriptionOrchestrator, OrchestrationResult
+from cesar.orchestrator import (
+    AgentReviewOrchestrator,
+    TranscriptionOrchestrator,
+    OrchestrationResult,
+)
 from cesar.transcriber import AudioTranscriber, TranscriptionSegment
 from cesar.diarization import DiarizationError, AuthenticationError
 from cesar.whisperx_wrapper import WhisperXPipeline, WhisperXSegment
@@ -72,6 +76,100 @@ class TestOrchestrationResult(unittest.TestCase):
             diarization_succeeded=False
         )
         self.assertEqual(result.speed_ratio, 0.0)
+
+
+class TestAgentReviewOrchestratorProgress(unittest.TestCase):
+    """Test agent-review progress callback signature adapters."""
+
+    def test_pipeline_progress_callback_accepts_step_and_percentage(self):
+        """Agent-review should adapt WhisperX two-arg progress callbacks."""
+        pipeline = MagicMock(spec=WhisperXPipeline)
+
+        def transcribe_and_diarize(*args, **kwargs):
+            kwargs["progress_callback"]("Transcribing...", 25.0)
+            return (
+                [
+                    WhisperXSegment(
+                        start=0.0,
+                        end=5.0,
+                        speaker="SPEAKER_00",
+                        text="Look at this",
+                    )
+                ],
+                1,
+                5.0,
+            )
+
+        pipeline.transcribe_and_diarize.side_effect = transcribe_and_diarize
+        orchestrator = AgentReviewOrchestrator(pipeline=pipeline)
+        progress_calls = []
+
+        segments, duration = orchestrator._transcribe(
+            Path("video.mp4"),
+            progress_callback=lambda pct: progress_calls.append(pct),
+        )
+
+        self.assertEqual(duration, 5.0)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(progress_calls, [25.0])
+
+    def test_transcriber_progress_callback_accepts_percentage_count_elapsed(self):
+        """Agent-review should adapt faster-whisper three-arg progress callbacks."""
+        transcriber = MagicMock(spec=AudioTranscriber)
+
+        def transcribe_to_segments(*args, **kwargs):
+            kwargs["progress_callback"](40.0, 2, 1.5)
+            return (
+                [TranscriptionSegment(0.0, 5.0, "Plain transcript")],
+                {"audio_duration": 5.0},
+            )
+
+        transcriber.transcribe_to_segments.side_effect = transcribe_to_segments
+        orchestrator = AgentReviewOrchestrator(transcriber=transcriber)
+        progress_calls = []
+
+        segments, duration = orchestrator._transcribe(
+            Path("video.mp4"),
+            progress_callback=lambda pct: progress_calls.append(pct),
+        )
+
+        self.assertEqual(duration, 5.0)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(progress_calls, [40.0])
+
+    def test_pipeline_fallback_uses_transcriber_progress_adapter(self):
+        """Fallback should not reuse the WhisperX progress callback signature."""
+        pipeline = MagicMock(spec=WhisperXPipeline)
+
+        def failing_pipeline(*args, **kwargs):
+            kwargs["progress_callback"]("Transcribing...", 10.0)
+            raise RuntimeError("pipeline failed")
+
+        pipeline.transcribe_and_diarize.side_effect = failing_pipeline
+        transcriber = MagicMock(spec=AudioTranscriber)
+
+        def transcribe_to_segments(*args, **kwargs):
+            kwargs["progress_callback"](55.0, 1, 2.0)
+            return (
+                [TranscriptionSegment(0.0, 5.0, "Fallback transcript")],
+                {"audio_duration": 5.0},
+            )
+
+        transcriber.transcribe_to_segments.side_effect = transcribe_to_segments
+        orchestrator = AgentReviewOrchestrator(
+            pipeline=pipeline,
+            transcriber=transcriber,
+        )
+        progress_calls = []
+
+        segments, duration = orchestrator._transcribe(
+            Path("video.mp4"),
+            progress_callback=lambda pct: progress_calls.append(pct),
+        )
+
+        self.assertEqual(duration, 5.0)
+        self.assertEqual(len(segments), 1)
+        self.assertEqual(progress_calls, [10.0, 55.0])
 
 
 class TestTranscriptionOrchestrator(unittest.TestCase):

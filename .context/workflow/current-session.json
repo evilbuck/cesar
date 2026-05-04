@@ -64,7 +64,10 @@
     ".context/backlog/items/phase-4-output-generation.md",
     ".context/backlog/items/phase-5-orchestration-integration.md",
     "tests/test_validation.py",
-    ".context/memory/ffmpeg-format-validation-2026-05-03.md"
+    ".context/memory/ffmpeg-format-validation-2026-05-03.md",
+    "tests/test_orchestrator.py",
+    ".context/memory/agent-review-progress-callback-fix-2026-05-03.md",
+    ".context/2026-05-03.agent-review-output-folder/plan-single-output-folder.md"
   ],
   "guided_workflow": null,
   "guided_stage": null,

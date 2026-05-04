@@ -353,9 +353,11 @@ class AgentReviewResult:
     """Result of agent-review mode processing.
 
     Attributes:
+        output_dir: Path to the output directory containing all artifacts
         output_path: Path to final output Markdown file
         sidecar_path: Path to JSON sidecar file
         images_dir: Directory containing screenshots
+        audio_path: Path to extracted audio file (None if not a video input)
         screenshots_count: Number of screenshots extracted
         segments_count: Number of transcript segments
         speakers_detected: Number of speakers found
@@ -365,9 +367,11 @@ class AgentReviewResult:
         screenshot_time: Time spent on screenshot extraction
         formatting_time: Time spent on output formatting
     """
+    output_dir: Path
     output_path: Path
     sidecar_path: Path
     images_dir: Path
+    audio_path: Optional[Path]
     screenshots_count: int
     segments_count: int
     speakers_detected: int
@@ -456,10 +460,20 @@ class AgentReviewOrchestrator:
         duration = video_metadata.duration
 
         # Create output directory structure
-        # output_path is like /path/to/review.md -> we want /path/to/review/
-        output_base = output_path.with_suffix('')  # Remove .md if present
-        images_dir = output_base / "images"
+        # output_path is like /path/to/review.md -> output_dir is /path/to/review/
+        # If no .md extension, treat as folder name directly
+        if output_path.suffix.lower() == ".md":
+            output_dir = output_path.with_suffix('')
+        else:
+            output_dir = output_path
+        output_dir.mkdir(parents=True, exist_ok=True)
+
+        stem = output_dir.name  # e.g., "review"
+        images_dir = output_dir / "images"
         images_dir.mkdir(parents=True, exist_ok=True)
+
+        # Final artifact paths inside the output directory
+        final_output_path = output_dir / f"{stem}.md"
 
         # Step 1: Transcribe audio (0-50%)
         if progress_callback:
@@ -483,7 +497,7 @@ class AgentReviewOrchestrator:
         from cesar.ffmpeg_scene_detector import generate_time_based_timestamps
         time_timestamps = generate_time_based_timestamps(duration, screenshots_interval)
         for ts in time_timestamps:
-            filename = f"{output_base.stem}_{format_timestamp_for_filename(ts)}.png"
+            filename = f"{stem}_{format_timestamp_for_filename(ts)}.png"
             all_timestamps.append((ts, filename, "time"))
 
         # 2b: Speech cue timestamps
@@ -494,7 +508,7 @@ class AgentReviewOrchestrator:
 
         cue_matches = detector.detect_cues(segments)
         for match in cue_matches:
-            filename = f"{output_base.stem}_{format_timestamp_for_filename(match.timestamp)}.png"
+            filename = f"{stem}_{format_timestamp_for_filename(match.timestamp)}.png"
             all_timestamps.append((match.timestamp, filename, "speech_cue"))
 
         # 2c: Scene change timestamps
@@ -505,7 +519,7 @@ class AgentReviewOrchestrator:
                     threshold=scene_threshold
                 )
                 for ts in scene_timestamps:
-                    filename = f"{output_base.stem}_{format_timestamp_for_filename(ts)}.png"
+                    filename = f"{stem}_{format_timestamp_for_filename(ts)}.png"
                     all_timestamps.append((ts, filename, "scene_change"))
             except Exception as e:
                 logger.warning(f"Scene detection failed, continuing without: {e}")
@@ -584,7 +598,8 @@ class AgentReviewOrchestrator:
             progress_callback("Generating sidecar...", 92.0)
 
         sidecar_gen = SidecarGenerator(
-            output_path=output_base,
+            output_dir=output_dir,
+            output_name=stem,
             source_path=video_path,
             duration=duration,
         )
@@ -602,15 +617,25 @@ class AgentReviewOrchestrator:
         formatter = AgentReviewMarkdownFormatter(
             source_path=video_path,
             duration=duration,
-            output_name=output_base.stem,
+            output_name=stem,
             images_dir=images_dir,
         )
         markdown_content = formatter.format(segments, associations)
 
         # Write Markdown file
-        final_output_path = output_base.with_suffix('.md')
         with open(final_output_path, 'w', encoding='utf-8') as f:
             f.write(markdown_content)
+
+        # Step 6: Extract audio track from video
+        audio_path = None
+        if self._video_processor.ffmpeg_available:
+            try:
+                audio_file = output_dir / "audio.mp3"
+                self._video_processor.extract_audio(video_path, audio_file)
+                audio_path = audio_file
+                logger.info(f"Extracted audio track to {audio_path}")
+            except Exception as e:
+                logger.warning(f"Audio extraction failed, continuing without: {e}")
 
         formatting_time = time.time() - formatting_start
         total_time = time.time() - start_time
@@ -625,9 +650,11 @@ class AgentReviewOrchestrator:
             progress_callback("Complete", 100.0)
 
         return AgentReviewResult(
+            output_dir=output_dir,
             output_path=final_output_path,
             sidecar_path=sidecar_path,
             images_dir=images_dir,
+            audio_path=audio_path,
             screenshots_count=len(successful_screenshots),
             segments_count=len(segments),
             speakers_detected=len(speakers),
@@ -652,12 +679,22 @@ class AgentReviewOrchestrator:
         Returns:
             Tuple of (segments, duration).
         """
+        def pipeline_progress(_phase: str, pct: float) -> None:
+            """Adapt WhisperX progress callbacks to agent-review percentage-only callbacks."""
+            if progress_callback:
+                progress_callback(pct)
+
+        def transcriber_progress(pct: float, _segment_count: int, _elapsed_time: float) -> None:
+            """Adapt AudioTranscriber progress callbacks to agent-review percentage-only callbacks."""
+            if progress_callback:
+                progress_callback(pct)
+
         # First try WhisperXPipeline with diarization if available
         if self.pipeline is not None:
             try:
                 segments, speakers, duration = self.pipeline.transcribe_and_diarize(
                     str(video_path),
-                    progress_callback=progress_callback,
+                    progress_callback=pipeline_progress if progress_callback else None,
                 )
                 # Convert WhisperXSegments to TranscriptionSegments
                 transcription_segments = []
@@ -677,7 +714,7 @@ class AgentReviewOrchestrator:
         if self.transcriber is not None:
             segments, metadata = self.transcriber.transcribe_to_segments(
                 str(video_path),
-                progress_callback=progress_callback,
+                progress_callback=transcriber_progress if progress_callback else None,
             )
             return segments, metadata['audio_duration']
 

@@ -1,5 +1,6 @@
 # Memory Index
 
+- 2026-05-03 | `agent-review-progress-callback-fix-2026-05-03.md` | domains: [debugging, bugfix, testing] | topics: [agent-review, progress-callbacks, orchestrator, scene-detection, ffmpeg] | status: completed
 - 2026-05-03 | `ffmpeg-format-validation-2026-05-03.md` | domains: [bugfix, testing] | topics: [ffmpeg, mp4, video-formats, validation, transcriber] | status: completed
 - 2026-05-03 | `phases-4-5-output-and-orchestration-2026-05-03.md` | domains: [implementation, testing] | topics: [sidecar-generator, agent-review-formatter, orchestration, agent-review-mode] | status: completed
 - 2026-05-03 | `phase3-association-skill-update-2026-05-03.md` | domains: [implementation, testing] | topics: [agent-review, association, transcriber-segments, skill-update, global-skill-install] | status: completed

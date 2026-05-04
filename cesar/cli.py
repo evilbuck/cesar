@@ -964,16 +964,18 @@ def transcribe(
                     console.print(f"  Segments: [cyan]{result.segments_count}[/cyan]")
                     console.print(f"  Speakers: [cyan]{result.speakers_detected}[/cyan]")
                     console.print(f"  Duration: [blue]{format_time(result.audio_duration)}[/blue]")
-                    console.print(f"\n  Output files:")
-                    console.print(f"    Markdown: [green]{result.output_path}[/green]")
-                    console.print(f"    Sidecar: [green]{result.sidecar_path}[/green]")
-                    console.print(f"    Images: [green]{result.images_dir}/[/green]")
+                    console.print(f"\n  Output directory: [green]{result.output_dir}/[/green]")
+                    console.print(f"    Markdown: [green]{result.output_path.name}[/green]")
+                    console.print(f"    Sidecar: [green]{result.sidecar_path.name}[/green]")
+                    if result.audio_path:
+                        console.print(f"    Audio: [green]{result.audio_path.name}[/green]")
+                    console.print(f"    Images: [green]images/[/green] ({result.screenshots_count} files)")
                     console.print(f"\n  Processing time breakdown:")
                     console.print(f"    Transcription: [blue]{format_time(result.transcription_time)}[/blue]")
                     console.print(f"    Screenshots: [blue]{format_time(result.screenshot_time)}[/blue]")
                     console.print(f"    Formatting: [blue]{format_time(result.formatting_time)}[/blue]")
                 else:
-                    console.print(f"Agent-review completed: {result.output_path}")
+                    console.print(f"Agent-review completed: {result.output_dir}")
                 
                 return 0
 
